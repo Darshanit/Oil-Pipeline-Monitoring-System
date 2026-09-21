@@ -48,61 +48,24 @@ def extract_pipeline_features(
     Returns:
       DataFrame enriched with engineered features.
     """
-    df = df_raw.copy()
-    window_samples = int(max(1, variance_window_sec / dt_sec))
+    from src.features.pressure_features import extract_pressure_features
+    from src.features.flow_features import extract_flow_features
 
-    station_cols = [c for c in df.columns if c.startswith("P_st")]
-    n_stations = len(station_cols)
+    # 1-4. Extract pressure derivatives, rolling variance, differentials, and gradients
+    df_with_pressure = extract_pressure_features(
+        df_raw,
+        dt_sec=dt_sec,
+        variance_window_sec=variance_window_sec
+    )
 
-    # 1. dP/dt for each station (bar/s) using central numerical gradient
-    dp_dt_cols = []
-    for col in station_cols:
-        dp_dt_name = f"{col}_dp_dt"
-        # 2-point gradient divided by dt
-        df[dp_dt_name] = np.gradient(df[col].values, dt_sec)
-        dp_dt_cols.append(dp_dt_name)
+    # 5-6. Extract raw flow imbalance, line-pack rate, and corrected flow imbalance
+    df_complete = extract_flow_features(
+        df_with_pressure,
+        linepack_coeff=linepack_coeff
+    )
 
-    # 2. Short-window pressure variance (5s rolling)
-    for col in station_cols:
-        var_name = f"{col}_var"
-        df[var_name] = df[col].rolling(window=window_samples, min_periods=1).var().fillna(0.0)
+    return df_complete
 
-    # 3. Adjacent Station Differentials (bar)
-    diff_cols = []
-    for i in range(n_stations - 1):
-        c1, c2 = station_cols[i], station_cols[i + 1]
-        diff_name = f"diff_st{i+1}_st{i+2}"
-        df[diff_name] = df[c1] - df[c2]
-        diff_cols.append(diff_name)
-
-    # 4. Section Hydraulic Gradients (bar/km assuming 20 km station spacing)
-    station_spacing_km = 20.0
-    grad_cols = []
-    for i in range(n_stations - 1):
-        diff_name = f"diff_st{i+1}_st{i+2}"
-        grad_name = f"grad_st{i+1}_st{i+2}"
-        df[grad_name] = df[diff_name] / station_spacing_km
-        grad_cols.append(grad_name)
-
-    # Total Overall Hydraulic Gradient (bar/km over 100 km)
-    total_length_km = 100.0
-    df["grad_total"] = (df[station_cols[0]] - df[station_cols[-1]]) / total_length_km
-
-    # 5. Raw Flow Imbalance (m3/h)
-    df["raw_flow_imbalance"] = df["flow_in"] - df["flow_out"]
-
-    # 6. Line-Pack Storage Rate Estimation
-    # Mean dP/dt across all 6 monitoring stations (bar/s)
-    df["mean_dp_dt"] = df[dp_dt_cols].mean(axis=1)
-
-    # Line-pack rate = K_lp * (d P_avg / dt)
-    # When pressure rises (d P_avg / dt > 0), oil is accumulating in pipe (inlet > outlet naturally)
-    df["linepack_rate"] = linepack_coeff * df["mean_dp_dt"]
-
-    # Corrected Flow Imbalance = Raw Imbalance - Linepack Storage Rate
-    df["corrected_flow_imbalance"] = df["raw_flow_imbalance"] - df["linepack_rate"]
-
-    return df
 
 
 def main():

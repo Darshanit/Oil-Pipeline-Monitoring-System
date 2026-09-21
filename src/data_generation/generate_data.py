@@ -171,6 +171,161 @@ def generate_pipeline_dataset(
     return pd.DataFrame(df_dict)
 
 
+def generate_shut_in_dataset(
+    duration_sec: float = 120.0,
+    dt_pressure: float = 0.1,
+    random_seed: int = 42
+) -> pd.DataFrame:
+    """
+    Generates synthetic dataset representing a pipeline in SHUT-IN mode:
+    Zero flow throughput, static locked-in head pressure (~35 bar) across all stations.
+    """
+    np.random.seed(random_seed)
+    timestamps = np.arange(0.0, duration_sec, dt_pressure)
+    n_samples = len(timestamps)
+
+    operating_mode = np.array(["Shut-in"] * n_samples, dtype=object)
+    event_ground_truth = np.array(["NORMAL"] * n_samples, dtype=object)
+
+    inlet_flow = np.zeros(n_samples) + np.random.normal(0.0, 0.1, size=n_samples)
+    outlet_flow = np.zeros(n_samples) + np.random.normal(0.0, 0.1, size=n_samples)
+
+    # Static line-pack pressure (~35 bar) across all stations
+    pressures = np.full((n_samples, len(STATIONS_KM)), 35.0)
+    p_noise = np.random.normal(0.0, 0.03, size=pressures.shape)
+    pressures += p_noise
+
+    df_dict = {
+        "timestamp": np.round(timestamps, 2),
+        "operating_mode": operating_mode,
+        "event_ground_truth": event_ground_truth,
+        "flow_in": np.round(np.maximum(0.0, inlet_flow), 2),
+        "flow_out": np.round(np.maximum(0.0, outlet_flow), 2),
+    }
+    for i, col in enumerate(STATION_NAMES):
+        df_dict[col] = np.round(pressures[:, i], 3)
+
+    return pd.DataFrame(df_dict)
+
+
+def generate_pump_transient_dataset(
+    duration_sec: float = 120.0,
+    dt_pressure: float = 0.1,
+    transient_start_sec: float = 30.0,
+    random_seed: int = 42
+) -> pd.DataFrame:
+    """
+    Generates synthetic dataset with a prominent pump start transient event at t=transient_start_sec.
+    """
+    np.random.seed(random_seed)
+    timestamps = np.arange(0.0, duration_sec, dt_pressure)
+    n_samples = len(timestamps)
+
+    operating_mode = np.array(["Flowing"] * n_samples, dtype=object)
+    event_ground_truth = np.array(["NORMAL"] * n_samples, dtype=object)
+
+    inlet_flow = np.full(n_samples, 500.0)
+    outlet_flow = np.full(n_samples, 500.0)
+
+    base_p1 = 50.0
+    nominal_dp_per_km = 0.4
+    pressures = np.zeros((n_samples, len(STATIONS_KM)))
+    for i, dist in enumerate(STATIONS_KM):
+        pressures[:, i] = base_p1 - nominal_dp_per_km * dist
+
+    # Pump start transient: sudden surge pulse propagating down the line
+    transient_mask = (timestamps >= transient_start_sec) & (timestamps <= transient_start_sec + 15.0)
+    event_ground_truth[transient_mask] = "PUMP_START"
+    t_trans = timestamps[transient_mask] - transient_start_sec
+
+    # Damped pressure surge oscillation
+    for i, dist in enumerate(STATIONS_KM):
+        delay = dist / WAVE_SPEED_KM_S
+        t_delayed = np.maximum(0, t_trans - delay)
+        pulse = 4.0 * np.exp(-0.35 * t_delayed) * np.sin(2.0 * np.pi * 0.4 * t_delayed)
+        pressures[transient_mask, i] += pulse
+
+    # Momentary flow kick
+    inlet_flow[transient_mask] += 35.0 * np.exp(-0.3 * t_trans)
+
+    p_noise = np.random.normal(0.0, 0.05, size=pressures.shape)
+    pressures += p_noise
+    inlet_flow += np.random.normal(0.0, 0.8, size=n_samples)
+    outlet_flow += np.random.normal(0.0, 0.8, size=n_samples)
+
+    df_dict = {
+        "timestamp": np.round(timestamps, 2),
+        "operating_mode": operating_mode,
+        "event_ground_truth": event_ground_truth,
+        "flow_in": np.round(inlet_flow, 2),
+        "flow_out": np.round(outlet_flow, 2),
+    }
+    for i, col in enumerate(STATION_NAMES):
+        df_dict[col] = np.round(pressures[:, i], 3)
+
+    return pd.DataFrame(df_dict)
+
+
+def generate_valve_event_dataset(
+    duration_sec: float = 120.0,
+    dt_pressure: float = 0.1,
+    valve_event_start_sec: float = 30.0,
+    random_seed: int = 42
+) -> pd.DataFrame:
+    """
+    Generates synthetic dataset with a valve maneuver transient at t=valve_event_start_sec.
+    """
+    np.random.seed(random_seed)
+    timestamps = np.arange(0.0, duration_sec, dt_pressure)
+    n_samples = len(timestamps)
+
+    operating_mode = np.array(["Flowing"] * n_samples, dtype=object)
+    event_ground_truth = np.array(["NORMAL"] * n_samples, dtype=object)
+
+    inlet_flow = np.full(n_samples, 500.0)
+    outlet_flow = np.full(n_samples, 500.0)
+
+    base_p1 = 50.0
+    nominal_dp_per_km = 0.4
+    pressures = np.zeros((n_samples, len(STATIONS_KM)))
+    for i, dist in enumerate(STATIONS_KM):
+        pressures[:, i] = base_p1 - nominal_dp_per_km * dist
+
+    valve_mask = (timestamps >= valve_event_start_sec) & (timestamps <= valve_event_start_sec + 15.0)
+    event_ground_truth[valve_mask] = "VALVE_MANEUVER"
+    t_v = timestamps[valve_mask] - valve_event_start_sec
+
+    # Upstream pressure rises, downstream pressure drops temporarily during valve throttle
+    for i, dist in enumerate(STATIONS_KM):
+        delay = dist / WAVE_SPEED_KM_S
+        t_delayed = np.maximum(0, t_v - delay)
+        if dist < 50.0:
+            pulse = 3.0 * np.exp(-0.3 * t_delayed) * (1.0 - np.cos(2.0 * np.pi * 0.2 * t_delayed))
+        else:
+            pulse = -2.5 * np.exp(-0.3 * t_delayed) * (1.0 - np.cos(2.0 * np.pi * 0.2 * t_delayed))
+        pressures[valve_mask, i] += pulse
+
+    outlet_flow[valve_mask] -= 25.0 * np.exp(-0.3 * t_v)
+
+    p_noise = np.random.normal(0.0, 0.05, size=pressures.shape)
+    pressures += p_noise
+    inlet_flow += np.random.normal(0.0, 0.8, size=n_samples)
+    outlet_flow += np.random.normal(0.0, 0.8, size=n_samples)
+
+    df_dict = {
+        "timestamp": np.round(timestamps, 2),
+        "operating_mode": operating_mode,
+        "event_ground_truth": event_ground_truth,
+        "flow_in": np.round(inlet_flow, 2),
+        "flow_out": np.round(outlet_flow, 2),
+    }
+    for i, col in enumerate(STATION_NAMES):
+        df_dict[col] = np.round(pressures[:, i], 3)
+
+    return pd.DataFrame(df_dict)
+
+
+
 def main():
     """Generates synthetic dataset and saves to data/raw/."""
     output_dir = os.path.join(os.path.dirname(__file__), "../../data/raw")
