@@ -1,0 +1,18 @@
+[browser]
+gatherUsageStats = false
+
+[server]
+headless = true
+enableCORS = false
+enableXsrfProtection = false
+
+[theme]
+base = "light"
+primaryColor = "#FFD23F"
+backgroundColor = "#F4F1DE"
+secondaryBackgroundColor = "#FFFFFF"
+textColor = "#111111"
+borderColor = "#111111"
+baseRadius = "0px"
+buttonRadius = "0px"
+font = "monospace"

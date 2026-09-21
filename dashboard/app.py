@@ -1,5 +1,6 @@
 """
-Streamlit Control Room Dashboard for Oil Pipeline Pressure Monitoring & Leak Detection System.
+Streamlit Control Room Dashboard for Oil Pipeline Intelligent Monitoring.
+Industrial Edge AI Leak Detection System (ZEDEDA / EVE-OS Compatible).
 
 Run with:
   streamlit run dashboard/app.py
@@ -24,87 +25,81 @@ from src.localization import estimate_leak_location
 
 # Page Configuration
 st.set_page_config(
-    page_title="Oil Pipeline Monitoring System",
+    page_title="Oil Pipeline Intelligent Monitoring",
     page_icon="🛢️",
     layout="wide",
     initial_sidebar_state="expanded"
 )
 
-# Custom CSS for Control Room Aesthetics
-st.markdown("""
-<style>
-    /* Dark glassmorphism container styling */
-    .stApp {
-        background-color: #0e1117;
-        color: #e0e0e0;
-    }
-    .metric-card {
-        background: rgba(255, 255, 255, 0.05);
-        border: 1px solid rgba(255, 255, 255, 0.1);
-        border-radius: 12px;
-        padding: 20px;
-        backdrop-filter: blur(10px);
-        margin-bottom: 15px;
-    }
-    .status-normal {
-        background-color: rgba(40, 167, 69, 0.2);
-        border: 2px solid #28a745;
-        color: #28a745;
-        padding: 12px;
-        border-radius: 8px;
-        font-size: 22px;
-        font-weight: bold;
-        text-align: center;
-    }
-    .status-suspect {
-        background-color: rgba(255, 193, 7, 0.2);
-        border: 2px solid #ffc107;
-        color: #ffc107;
-        padding: 12px;
-        border-radius: 8px;
-        font-size: 22px;
-        font-weight: bold;
-        text-align: center;
-    }
-    .status-leak {
-        background-color: rgba(220, 53, 69, 0.2);
-        border: 2px solid #dc3545;
-        color: #dc3545;
-        padding: 12px;
-        border-radius: 8px;
-        font-size: 22px;
-        font-weight: bold;
-        text-align: center;
-        box-shadow: 0 0 15px rgba(220, 53, 69, 0.5);
-    }
-    .action-box {
-        background: rgba(23, 162, 184, 0.15);
-        border-left: 4px solid #17a2b8;
-        padding: 12px 16px;
-        border-radius: 4px;
-        font-size: 15px;
-        margin-top: 8px;
-        margin-bottom: 14px;
-    }
-    .suppression-banner {
-        background: rgba(49, 130, 206, 0.2);
-        border-left: 5px solid #3182ce;
-        padding: 12px 16px;
-        border-radius: 6px;
-        font-size: 14px;
-        margin-top: 8px;
-        margin-bottom: 12px;
-    }
-    .localization-card {
-        background: rgba(229, 62, 62, 0.12);
-        border: 1px solid rgba(229, 62, 62, 0.35);
-        border-radius: 8px;
-        padding: 12px 18px;
-        margin-top: 8px;
-        margin-bottom: 12px;
-    }
-</style>
-""", unsafe_allow_html=True)
+
+def load_control_room_assets():
+    """Injects Neo-Brutalist design tokens, motion animations, and styling."""
+    assets_dir = os.path.join(os.path.dirname(__file__), "assets")
+    css_files = ["tokens.css", "motion.css", "style.css"]
+    combined_css = []
+    for fname in css_files:
+        path = os.path.join(assets_dir, fname)
+        if os.path.exists(path):
+            with open(path, "r", encoding="utf-8") as f:
+                combined_css.append(f.read())
+    if combined_css:
+        st.markdown(f"<style>\n{chr(10).join(combined_css)}\n</style>", unsafe_allow_html=True)
+
+
+load_control_room_assets()
+
+
+def style_brutalist_chart(fig, title: str = "", height: int = 280, showlegend: bool = True):
+    """
+    Applies strict Neo-Brutalist control room styling to a Plotly figure:
+    White chart canvas, crisp gridlines, black axis borders, local monospace font.
+    """
+    fig.update_layout(
+        title=dict(
+            text=f"<b>{title.upper()}</b>" if title else None,
+            font=dict(family="FiraCodeLocal, monospace", size=13, color="#111111"),
+            x=0.01,
+            y=0.96
+        ) if title else None,
+        font=dict(family="FiraCodeLocal, monospace", color="#111111", size=11),
+        paper_bgcolor="#FFFFFF",
+        plot_bgcolor="#FFFFFF",
+        height=height,
+        margin=dict(l=30, r=20, t=44 if title else 20, b=30),
+        showlegend=showlegend,
+        legend=dict(
+            orientation="h",
+            y=1.16,
+            x=0,
+            bgcolor="#FFFFFF",
+            bordercolor="#111111",
+            borderwidth=2,
+            font=dict(family="FiraCodeLocal, monospace", size=10, color="#111111")
+        ),
+        xaxis=dict(
+            gridcolor="#E2DFCD",
+            gridwidth=1,
+            linecolor="#111111",
+            linewidth=2,
+            zeroline=True,
+            zerolinecolor="#111111",
+            zerolinewidth=2,
+            tickfont=dict(family="FiraCodeLocal, monospace", color="#111111", size=10),
+            title_font=dict(family="FiraCodeLocal, monospace", color="#111111", size=11)
+        ),
+        yaxis=dict(
+            gridcolor="#E2DFCD",
+            gridwidth=1,
+            linecolor="#111111",
+            linewidth=2,
+            zeroline=True,
+            zerolinecolor="#111111",
+            zerolinewidth=2,
+            tickfont=dict(family="FiraCodeLocal, monospace", color="#111111", size=10),
+            title_font=dict(family="FiraCodeLocal, monospace", color="#111111", size=11)
+        )
+    )
+    return fig
 
 
 @st.cache_data
@@ -142,11 +137,18 @@ def load_scenario_detection_results(scenario_name: str, seed: int = 42) -> pd.Da
 
 
 def main():
-    st.title("🛢️ Oil Pipeline Pressure Monitoring & Leak Detection System")
-    st.markdown("*Real-Time Multi-Sensor Feature Fusion & Acoustic/Hydraulic Localization Prototype*")
+    # Industrial Neo-Brutalist Header
+    st.markdown("""
+    <div class="industrial-header-box">
+        <h1>OIL PIPELINE INTELLIGENT MONITORING</h1>
+        <div class="subtext">
+            EDGE AI LEAK DETECTION &bull; ZEDEDA / EVE-OS &bull; PROTOTYPE (SYNTHETIC DATA)
+        </div>
+    </div>
+    """, unsafe_allow_html=True)
 
     # Sidebar Controls
-    st.sidebar.header("⚙️ Simulation Controls")
+    st.sidebar.header("⚙️ SIMULATION CONTROLS")
 
     # Scenario Selector
     scenario_options = [
@@ -215,34 +217,36 @@ def main():
     col1, col2, col3, col4 = st.columns(4)
 
     with col1:
-        st.markdown("**System Status**")
+        st.markdown("**SYSTEM HEALTH STATE**")
         if status == "LEAK DETECTED":
-            st.markdown('<div class="status-leak">🚨 LEAK DETECTED</div>', unsafe_allow_html=True)
+            st.markdown('<div class="status-badge status-critical status-critical-strobe">[■ ALARM] CRITICAL</div>', unsafe_allow_html=True)
         elif status == "SUSPECTED ANOMALY":
-            st.markdown('<div class="status-suspect">⚠️ SUSPECTED</div>', unsafe_allow_html=True)
+            st.markdown('<div class="status-badge status-warning">[▲ WARN] WARNING</div>', unsafe_allow_html=True)
+        elif mode in ["SHUT-IN", "TRANSIENT_OPERATION"] or "TRANSIENT" in str(mode):
+            st.markdown('<div class="status-badge status-monitoring">[◆ CHK] MONITORING</div>', unsafe_allow_html=True)
         else:
-            st.markdown('<div class="status-normal">✅ NORMAL</div>', unsafe_allow_html=True)
+            st.markdown('<div class="status-badge status-normal">[● OK] NORMAL</div>', unsafe_allow_html=True)
 
     with col2:
-        st.metric("Leak Confidence", f"{conf:.1f}%", delta=f"{conf - 10.0:.1f}%" if conf > 10 else None)
+        st.metric("LEAK CONFIDENCE", f"{conf:.1f}%", delta=f"{conf - 10.0:.1f}%" if conf > 10 else None)
         st.progress(min(1.0, max(0.0, conf / 100.0)))
 
     with col3:
-        st.metric("Operating Mode", mode)
+        st.metric("OPERATING MODE", mode)
         st.caption(f"Ground Truth Event: **{gt_event}**")
 
     with col4:
         est_km = current_row.get("estimated_leak_km", np.nan)
         if pd.notna(est_km):
-            st.metric("Estimated Location", f"{est_km:.1f} km", delta=f"{current_row['nearest_station']}")
+            st.metric("ESTIMATED LOCATION", f"{est_km:.1f} km", delta=f"{current_row['nearest_station']}")
         else:
-            st.metric("Estimated Location", "None", delta="Pipeline Nominal")
+            st.metric("ESTIMATED LOCATION", "None", delta="Pipeline Nominal")
 
     # Scenario-Specific Notifications & Honest Proof Display
     if supp_reason and str(supp_reason) not in ["nan", "None", ""]:
         st.markdown(
-            f'<div class="suppression-banner">🛡️ <strong>Mode Gating Active:</strong> {supp_reason}. '
-            f'Confidence is capped to prevent false CRITICAL alarms.</div>',
+            f'<div class="suppression-banner">🛡️ <strong>MODE GATING ACTIVE:</strong> {supp_reason}. '
+            f'Confidence is capped to suppress false alarms during hydraulic transients.</div>',
             unsafe_allow_html=True
         )
 
@@ -252,24 +256,24 @@ def main():
     if pd.notna(gt_km):
         loc_c1, loc_c2, loc_c3, loc_c4 = st.columns(4)
         with loc_c1:
-            st.metric("🎯 Ground Truth", f"{gt_km:.1f} km")
+            st.metric("🎯 GROUND TRUTH", f"{gt_km:.1f} km")
         with loc_c2:
-            st.metric("📍 Estimated Location", f"{est_km:.1f} km" if pd.notna(est_km) else "Awaiting Wave...")
+            st.metric("📍 ESTIMATED LOCATION", f"{est_km:.1f} km" if pd.notna(est_km) else "Awaiting Wave...")
         with loc_c3:
-            st.metric("📏 Localization Error", f"{err_km:.1f} km" if pd.notna(err_km) else "—")
+            st.metric("📏 LOCALIZATION ERROR", f"{err_km:.1f} km" if pd.notna(err_km) else "—")
         with loc_c4:
-            st.metric("⚡ Wave Speed", "1.0 km/s (1000 m/s)")
+            st.metric("⚡ ACOUSTIC SPEED", "1.0 km/s (1000 m/s)")
 
     # Small Chronic Leak Honest Diagnostic Notice
     if "SMALL" in selected_scenario and "LEAK" in gt_event:
-        st.caption("ℹ️ **Honest Diagnostic Note**: Pinhole chronic leak (~16 m³/h). Detectable via sustained flow mass imbalance and subtle gradient shift; gradual onset correctly does not generate an acoustic shockwave.")
+        st.caption("ℹ️ **Honest Diagnostic Verification**: Small chronic leak (~16 m³/h). Detected via sustained line-pack corrected flow imbalance and subtle hydraulic slope shift; gradual onset correctly does not generate an acoustic shockwave.")
 
     # Recommended Action Box
     action_text = current_row.get("recommended_action", "NORMAL OPERATION: All parameters within standard operational baseline.")
-    st.markdown(f'<div class="action-box"><strong>Recommended Operator Action:</strong> {action_text}</div>', unsafe_allow_html=True)
+    st.markdown(f'<div class="action-box"><strong>OPERATOR ADVISORY:</strong> {action_text}</div>', unsafe_allow_html=True)
 
     # Row 1: Pipeline Visualization Schematic
-    st.subheader("📍 Pipeline Schematic & Spatial Sensor Layout")
+    st.subheader("📍 PIPELINE SPATIAL SENSOR SCHEMATIC (100 KM)")
 
     fig_pipe = go.Figure()
 
@@ -277,19 +281,20 @@ def main():
     fig_pipe.add_trace(go.Scatter(
         x=[0, 100], y=[0, 0],
         mode="lines",
-        line=dict(color="#4a5568", width=10),
-        name="Pipeline Body",
+        line=dict(color="#111111", width=12),
+        name="Pipeline Trunk",
         hoverinfo="skip"
     ))
 
     # Add 6 monitoring stations
-    st_names = [f"Station {i+1}<br>{int(x)} km" for i, x in enumerate(STATIONS_KM)]
+    st_names = [f"STATION {i+1}<br><b>{int(x)} KM</b>" for i, x in enumerate(STATIONS_KM)]
     fig_pipe.add_trace(go.Scatter(
         x=STATIONS_KM, y=[0]*6,
         mode="markers+text",
-        marker=dict(symbol="square", size=24, color="#3182ce", line=dict(color="#ffffff", width=2)),
+        marker=dict(symbol="square", size=24, color="#FFD23F", line=dict(color="#111111", width=3)),
         text=st_names,
         textposition="top center",
+        textfont=dict(family="FiraCodeLocal, monospace", size=10, color="#111111"),
         name="Monitoring Stations"
     ))
 
@@ -298,9 +303,10 @@ def main():
         fig_pipe.add_trace(go.Scatter(
             x=[gt_km], y=[0],
             mode="markers+text",
-            marker=dict(symbol="circle-open", size=36, color="#48bb78", line=dict(color="#48bb78", width=3)),
-            text=[f"GROUND TRUTH<br>{gt_km:.1f} km"],
+            marker=dict(symbol="circle-open", size=36, color="#35D07F", line=dict(color="#111111", width=4)),
+            text=[f"ACTUAL LEAK<br><b>{gt_km:.1f} KM</b>"],
             textposition="top center",
+            textfont=dict(family="FiraCodeLocal, monospace", size=11, color="#111111"),
             name="Ground Truth"
         ))
 
@@ -309,28 +315,26 @@ def main():
         fig_pipe.add_trace(go.Scatter(
             x=[est_km], y=[0],
             mode="markers+text",
-            marker=dict(symbol="triangle-up", size=32, color="#e53e3e", line=dict(color="#ffffff", width=3)),
-            text=[f"ESTIMATED<br>{est_km:.1f} km"],
+            marker=dict(symbol="triangle-up", size=34, color="#FF5A5F", line=dict(color="#111111", width=3)),
+            text=[f"ESTIMATED<br><b>{est_km:.1f} KM</b>"],
             textposition="bottom center",
+            textfont=dict(family="FiraCodeLocal, monospace", size=11, color="#111111"),
             name="Estimated Leak"
         ))
 
-    fig_pipe.update_layout(
-        xaxis=dict(range=[-5, 105], title="Pipeline Distance (km)", showgrid=True, zeroline=False),
-        yaxis=dict(range=[-1.5, 1.5], showticklabels=False, showgrid=False, zeroline=False),
-        height=220,
-        margin=dict(l=20, r=20, t=30, b=20),
-        paper_bgcolor="rgba(0,0,0,0)",
-        plot_bgcolor="rgba(0,0,0,0)",
-        showlegend=False
-    )
+    style_brutalist_chart(fig_pipe, title="", height=230, showlegend=False)
+    fig_pipe.update_xaxes(range=[-5, 105], title="Pipeline Linear Distance (km)")
+    fig_pipe.update_yaxes(range=[-1.5, 1.5], showticklabels=False, showgrid=False, zeroline=False)
     st.plotly_chart(fig_pipe, width="stretch")
 
     # Row 2: Two-column layout for telemetry graphs & evidence scores
     chart_col, evidence_col = st.columns([2, 1])
 
     with chart_col:
-        st.subheader("📈 Multi-Station Sensor Telemetry (10 Hz)")
+        st.subheader("📈 SENSOR TELEMETRY STREAMS (10 HZ)")
+
+        # Station trace colors from curated palette
+        station_colors = ["#111111", "#4D96FF", "#35D07F", "#FF5A5F", "#7B2CBF", "#D97706"]
 
         # Pressure graph
         fig_p = go.Figure()
@@ -339,43 +343,30 @@ def main():
                 x=df_current["timestamp"],
                 y=df_current[f"P_st{i}"],
                 mode="lines",
-                name=f"Station {i} ({int(STATIONS_KM[i-1])} km)"
+                name=f"ST {i} ({int(STATIONS_KM[i-1])} km)",
+                line=dict(color=station_colors[i-1], width=2)
             ))
 
-        fig_p.add_vline(x=selected_t, line_dash="dash", line_color="white", annotation_text="Current Time")
-        fig_p.update_layout(
-            title="Station Pressures (bar)",
-            xaxis_title="Time (seconds)",
-            yaxis_title="Pressure (bar)",
-            height=280,
-            margin=dict(l=20, r=20, t=40, b=20),
-            paper_bgcolor="rgba(0,0,0,0)",
-            plot_bgcolor="rgba(0,0,0,0)",
-            legend=dict(orientation="h", y=1.15, x=0)
-        )
+        fig_p.add_vline(x=selected_t, line_dash="dash", line_color="#111111", line_width=2, annotation_text="PLAYBACK")
+        style_brutalist_chart(fig_p, title="STATION PRESSURES (BAR)", height=280)
+        fig_p.update_xaxes(title="Time (seconds)")
+        fig_p.update_yaxes(title="Pressure (bar)")
         st.plotly_chart(fig_p, width="stretch")
 
         # Flow graph
         fig_q = go.Figure()
-        fig_q.add_trace(go.Scatter(x=df_current["timestamp"], y=df_current["flow_in"], mode="lines", name="Inlet Flow (m³/h)", line=dict(color="#3182ce")))
-        fig_q.add_trace(go.Scatter(x=df_current["timestamp"], y=df_current["flow_out"], mode="lines", name="Outlet Flow (m³/h)", line=dict(color="#805ad5")))
+        fig_q.add_trace(go.Scatter(x=df_current["timestamp"], y=df_current["flow_in"], mode="lines", name="Inlet Flow (m³/h)", line=dict(color="#4D96FF", width=2.5)))
+        fig_q.add_trace(go.Scatter(x=df_current["timestamp"], y=df_current["flow_out"], mode="lines", name="Outlet Flow (m³/h)", line=dict(color="#FF5A5F", width=2.5)))
         if "corrected_flow_imbalance" in df_current.columns:
-            fig_q.add_trace(go.Scatter(x=df_current["timestamp"], y=df_current["corrected_flow_imbalance"], mode="lines", name="Corrected Imbalance (m³/h)", line=dict(color="#319795")))
-        fig_q.add_vline(x=selected_t, line_dash="dash", line_color="white")
-        fig_q.update_layout(
-            title="Flow Dynamics & Line-Pack Corrected Imbalance (m³/h)",
-            xaxis_title="Time (seconds)",
-            yaxis_title="Flow Rate (m³/h)",
-            height=260,
-            margin=dict(l=20, r=20, t=40, b=20),
-            paper_bgcolor="rgba(0,0,0,0)",
-            plot_bgcolor="rgba(0,0,0,0)",
-            legend=dict(orientation="h", y=1.15, x=0)
-        )
+            fig_q.add_trace(go.Scatter(x=df_current["timestamp"], y=df_current["corrected_flow_imbalance"], mode="lines", name="Corrected Imbalance (m³/h)", line=dict(color="#111111", width=2, dash="dot")))
+        fig_q.add_vline(x=selected_t, line_dash="dash", line_color="#111111", line_width=2)
+        style_brutalist_chart(fig_q, title="FLOW DYNAMICS & LINE-PACK CORRECTED IMBALANCE (M³/H)", height=260)
+        fig_q.update_xaxes(title="Time (seconds)")
+        fig_q.update_yaxes(title="Flow Rate (m³/h)")
         st.plotly_chart(fig_q, width="stretch")
 
     with evidence_col:
-        st.subheader("🔍 Evidence Stream Decomposition")
+        st.subheader("🔍 EVIDENCE DECOMPOSITION")
 
         # Current row evidence breakdown
         ml_ev = current_row["ml_evidence_score"] * 100.0
@@ -383,44 +374,41 @@ def main():
         npw_ev = current_row["npw_evidence_score"] * 100.0
         press_ev = current_row.get("pressure_evidence_score", 0.0) * 100.0
 
-        st.markdown(f"**ML Anomaly Score ({w_ml*100:.0f}% Weight)**")
+        st.markdown(f"**ML ANOMALY SCORE ({w_ml*100:.0f}% WEIGHT)**")
         st.progress(min(1.0, max(0.0, ml_ev / 100.0)))
-        st.caption(f"Score: **{ml_ev:.1f}%** (Mode: '{mode}')")
+        st.caption(f"Score: **{ml_ev:.1f}%** (Operating Mode: '{mode}')")
 
-        st.markdown(f"**Flow Imbalance Score ({w_flow*100:.0f}% Weight)**")
+        st.markdown(f"**FLOW IMBALANCE SCORE ({w_flow*100:.0f}% WEIGHT)**")
         st.progress(min(1.0, max(0.0, flow_ev / 100.0)))
-        st.caption(f"Score: **{flow_ev:.1f}%** (Line-pack corrected mass balance)")
+        st.caption(f"Score: **{flow_ev:.1f}%** (Line-pack mass balance)")
 
-        st.markdown(f"**Pressure Evidence Score ({w_press*100:.0f}% Weight)**")
+        st.markdown(f"**PRESSURE EVIDENCE SCORE ({w_press*100:.0f}% WEIGHT)**")
         st.progress(min(1.0, max(0.0, press_ev / 100.0)))
-        st.caption(f"Score: **{press_ev:.1f}%** (Hydraulic gradient kink & slopes)")
+        st.caption(f"Score: **{press_ev:.1f}%** (Hydraulic gradient slopes)")
 
-        st.markdown(f"**NPW Wave Front Score ({w_npw*100:.0f}% Weight)**")
+        st.markdown(f"**NPW WAVE FRONT SCORE ({w_npw*100:.0f}% WEIGHT)**")
         st.progress(min(1.0, max(0.0, npw_ev / 100.0)))
-        st.caption(f"Score: **{npw_ev:.1f}%** (10 Hz acoustic drop wave front)")
+        st.caption(f"Score: **{npw_ev:.1f}%** (10 Hz acoustic drop)")
 
         st.markdown("---")
-        st.subheader("📊 Fused Leak Confidence Timeline")
+        st.subheader("📊 FUSED LEAK CONFIDENCE TIMELINE")
         fig_conf = go.Figure()
-        fig_conf.add_trace(go.Scatter(x=df["timestamp"], y=df["confidence_pct"], mode="lines", name="Confidence %", line=dict(color="#e53e3e", width=2)))
-        fig_conf.add_hline(y=65.0, line_dash="dash", line_color="red", annotation_text="Leak Threshold")
-        fig_conf.add_hline(y=35.0, line_dash="dot", line_color="orange", annotation_text="Suspect Threshold")
-        fig_conf.add_vline(x=selected_t, line_dash="dash", line_color="white")
-        fig_conf.update_layout(
-            title="Fused Confidence (%) over Time",
-            xaxis_title="Time (s)",
-            yaxis_title="Confidence (%)",
-            height=250,
-            margin=dict(l=10, r=10, t=30, b=10),
-            paper_bgcolor="rgba(0,0,0,0)",
-            plot_bgcolor="rgba(0,0,0,0)",
-            showlegend=False
-        )
+        fig_conf.add_trace(go.Scatter(x=df["timestamp"], y=df["confidence_pct"], mode="lines", name="Confidence %", line=dict(color="#FF5A5F", width=2.5)))
+        fig_conf.add_hline(y=65.0, line_dash="dash", line_color="#FF5A5F", line_width=2, annotation_text="LEAK THRESHOLD (65%)", annotation_font=dict(family="FiraCodeLocal, monospace", color="#FF5A5F", size=10))
+        fig_conf.add_hline(y=35.0, line_dash="dot", line_color="#111111", line_width=2, annotation_text="SUSPECT THRESHOLD (35%)", annotation_font=dict(family="FiraCodeLocal, monospace", color="#111111", size=10))
+        fig_conf.add_vline(x=selected_t, line_dash="dash", line_color="#111111", line_width=2)
+        style_brutalist_chart(fig_conf, title="CONFIDENCE (%) OVER TIME", height=240, showlegend=False)
+        fig_conf.update_xaxes(title="Time (s)")
+        fig_conf.update_yaxes(title="Confidence (%)", range=[0, 105])
         st.plotly_chart(fig_conf, width="stretch")
 
-    # Footer
-    st.markdown("---")
-    st.caption("Oil Pipeline Pressure Monitoring & Leak Detection System • Built with Python, Scikit-Learn, SciPy & Streamlit")
+    # Control Room Watermark Footer
+    st.markdown("""
+    <div class="control-room-footer">
+        <div><strong>OIL PIPELINE INTELLIGENT MONITORING</strong> &bull; EDGE AI LEAK DETECTION</div>
+        <div><strong>ZEDEDA / EVE-OS READY</strong> &bull; PROTOTYPE (SYNTHETIC DATA)</div>
+    </div>
+    """, unsafe_allow_html=True)
 
 
 if __name__ == "__main__":

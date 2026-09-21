@@ -1,0 +1,310 @@
+/* ==========================================================================
+   NEO-BRUTALIST INDUSTRIAL CONTROL ROOM STYLESHEET
+   Strict Neo-Brutalist Architecture: 3px Black Borders, Hard 6px/10px Shadows
+   ========================================================================== */
+
+/* Local Bundled Font Declarations (Zero External CDN Calls) */
+@font-face {
+  font-family: 'FiraCodeLocal';
+  src: local('Fira Code'), local('FiraCode Nerd Font Mono'), local('Consolas'), url('fonts/FiraCodeNerdFontMono-Regular.ttf') format('truetype');
+  font-weight: 400;
+  font-style: normal;
+}
+
+@font-face {
+  font-family: 'FiraCodeLocal';
+  src: local('Fira Code Bold'), local('FiraCode Nerd Font Mono Bold'), local('Consolas Bold'), url('fonts/FiraCodeNerdFontMono-Bold.ttf') format('truetype');
+  font-weight: 700;
+  font-style: normal;
+}
+
+/* Base Document & Canvas */
+html, body, [data-testid="stAppViewContainer"], .stApp {
+  background-color: #F4F1DE !important;
+  color: #111111 !important;
+  font-family: 'FiraCodeLocal', 'Fira Code', monospace, -apple-system, sans-serif !important;
+  -webkit-font-smoothing: antialiased;
+}
+
+/* Control Room Header & Typography */
+h1, h2, h3, h4, h5, h6, .stMarkdown h1, .stMarkdown h2, .stMarkdown h3 {
+  color: #111111 !important;
+  font-family: 'FiraCodeLocal', 'Fira Code', monospace !important;
+  font-weight: 900 !important;
+  letter-spacing: -0.5px !important;
+  text-transform: uppercase !important;
+}
+
+h1 {
+  font-size: 1.85rem !important;
+  border-bottom: 3px solid #111111 !important;
+  padding-bottom: 8px !important;
+  margin-bottom: 12px !important;
+}
+
+h2 {
+  font-size: 1.4rem !important;
+  margin-top: 18px !important;
+  margin-bottom: 10px !important;
+}
+
+h3 {
+  font-size: 1.15rem !important;
+  margin-top: 14px !important;
+  margin-bottom: 8px !important;
+}
+
+/* Top Industrial Title Banner */
+.industrial-header-box {
+  background-color: #FFD23F !important;
+  border: 3px solid #111111 !important;
+  box-shadow: 10px 10px 0px #111111 !important;
+  padding: 18px 24px !important;
+  border-radius: 0px !important;
+  margin-bottom: 20px !important;
+}
+
+.industrial-header-box h1 {
+  margin: 0 !important;
+  padding: 0 !important;
+  border: none !important;
+  color: #111111 !important;
+  font-size: 1.9rem !important;
+}
+
+.industrial-header-box .subtext {
+  font-size: 0.95rem !important;
+  font-weight: 700 !important;
+  letter-spacing: 0.5px !important;
+  color: #111111 !important;
+  margin-top: 6px !important;
+}
+
+/* Sidebar Customization */
+[data-testid="stSidebar"] {
+  background-color: #FFFFFF !important;
+  border-right: 3px solid #111111 !important;
+}
+
+[data-testid="stSidebar"] hr {
+  border-color: #111111 !important;
+  border-width: 2px !important;
+}
+
+/* Cards & Containers: Heavy Borders and Hard Shadows */
+.brutal-card,
+[data-testid="stMetric"],
+.metric-card {
+  background-color: #FFFFFF !important;
+  border: 3px solid #111111 !important;
+  box-shadow: 6px 6px 0px #111111 !important;
+  border-radius: 0px !important;
+  padding: 16px !important;
+  margin-bottom: 16px !important;
+  color: #111111 !important;
+}
+
+.brutal-card-lg {
+  background-color: #FFFFFF !important;
+  border: 3px solid #111111 !important;
+  box-shadow: 10px 10px 0px #111111 !important;
+  border-radius: 0px !important;
+  padding: 20px !important;
+  margin-bottom: 20px !important;
+}
+
+/* Metric Display Overrides */
+[data-testid="stMetricValue"] {
+  font-family: 'FiraCodeLocal', 'Fira Code', monospace !important;
+  font-size: 1.75rem !important;
+  font-weight: 900 !important;
+  color: #111111 !important;
+}
+
+[data-testid="stMetricLabel"] {
+  font-family: 'FiraCodeLocal', 'Fira Code', monospace !important;
+  font-size: 0.85rem !important;
+  font-weight: 700 !important;
+  text-transform: uppercase !important;
+  color: #111111 !important;
+}
+
+/* ACCESSIBILITY: Multi-Modal Status Badges (Color + Distinct Shapes + Text) */
+.status-badge {
+  border: 3px solid #111111 !important;
+  border-radius: 0px !important;
+  padding: 12px 16px !important;
+  font-family: 'FiraCodeLocal', 'Fira Code', monospace !important;
+  font-size: 1.15rem !important;
+  font-weight: 900 !important;
+  text-align: center !important;
+  letter-spacing: 0.5px !important;
+  display: flex !important;
+  align-items: center !important;
+  justify-content: center !important;
+  gap: 10px !important;
+}
+
+/* 1. NORMAL: Green (#35D07F) with Solid Circle [●] */
+.status-normal {
+  background-color: #35D07F !important;
+  color: #111111 !important;
+  box-shadow: 6px 6px 0px #111111 !important;
+}
+
+/* 2. MONITORING: Blue (#4D96FF) with Solid Diamond [◆] */
+.status-monitoring {
+  background-color: #4D96FF !important;
+  color: #111111 !important;
+  box-shadow: 6px 6px 0px #111111 !important;
+}
+
+/* 3. WARNING / SUSPECT: Yellow (#FFD23F) with Solid Triangle [▲] */
+.status-warning,
+.status-suspect {
+  background-color: #FFD23F !important;
+  color: #111111 !important;
+  box-shadow: 6px 6px 0px #111111 !important;
+}
+
+/* 4. CRITICAL / LEAK: Red (#FF5A5F) with Solid Square [■] */
+.status-critical,
+.status-leak {
+  background-color: #FF5A5F !important;
+  color: #FFFFFF !important;
+  box-shadow: 10px 10px 0px #111111 !important;
+}
+
+/* Operational Callout Banners */
+.action-box {
+  background-color: #FFFFFF !important;
+  border: 3px solid #111111 !important;
+  box-shadow: 6px 6px 0px #111111 !important;
+  border-left: 10px solid #111111 !important;
+  padding: 14px 18px !important;
+  border-radius: 0px !important;
+  font-size: 0.95rem !important;
+  font-weight: 700 !important;
+  color: #111111 !important;
+  margin-top: 10px !important;
+  margin-bottom: 16px !important;
+}
+
+.suppression-banner {
+  background-color: #4D96FF !important;
+  border: 3px solid #111111 !important;
+  box-shadow: 6px 6px 0px #111111 !important;
+  padding: 14px 18px !important;
+  border-radius: 0px !important;
+  font-size: 0.95rem !important;
+  font-weight: 800 !important;
+  color: #111111 !important;
+  margin-top: 10px !important;
+  margin-bottom: 16px !important;
+}
+
+.localization-card {
+  background-color: #FFFFFF !important;
+  border: 3px solid #111111 !important;
+  box-shadow: 6px 6px 0px #111111 !important;
+  border-radius: 0px !important;
+  padding: 14px 18px !important;
+  margin-top: 10px !important;
+  margin-bottom: 16px !important;
+}
+
+/* Form Controls: Buttons, Sliders, Selectboxes */
+.stButton > button,
+button[kind="primary"] {
+  background-color: #FFD23F !important;
+  color: #111111 !important;
+  border: 3px solid #111111 !important;
+  box-shadow: 6px 6px 0px #111111 !important;
+  border-radius: 0px !important;
+  font-family: 'FiraCodeLocal', 'Fira Code', monospace !important;
+  font-weight: 900 !important;
+  text-transform: uppercase !important;
+  padding: 8px 18px !important;
+}
+
+.stSelectbox > div > div,
+[data-baseweb="select"] {
+  border: 3px solid #111111 !important;
+  border-radius: 0px !important;
+  background-color: #FFFFFF !important;
+  color: #111111 !important;
+  box-shadow: 4px 4px 0px #111111 !important;
+}
+
+/* Range Slider */
+[data-testid="stSlider"] > div {
+  color: #111111 !important;
+}
+
+[data-testid="stSlider"] [role="slider"] {
+  background-color: #FFD23F !important;
+  border: 3px solid #111111 !important;
+  border-radius: 0px !important;
+  box-shadow: 3px 3px 0px #111111 !important;
+  width: 22px !important;
+  height: 22px !important;
+}
+
+/* Progress Bar */
+.stProgress > div > div > div > div {
+  background-color: #FF5A5F !important;
+  border-radius: 0px !important;
+}
+
+.stProgress > div > div {
+  border: 3px solid #111111 !important;
+  background-color: #FFFFFF !important;
+  border-radius: 0px !important;
+  height: 16px !important;
+}
+
+/* Chart Container Neo-Brutalist Frame */
+[data-testid="stPlotlyChart"] {
+  background-color: #FFFFFF !important;
+  border: 3px solid #111111 !important;
+  box-shadow: 6px 6px 0px #111111 !important;
+  border-radius: 0px !important;
+  padding: 8px !important;
+  margin-bottom: 14px !important;
+}
+
+/* Alert Boxes Overrides */
+[data-testid="stAlert"] {
+  border: 3px solid #111111 !important;
+  border-radius: 0px !important;
+  box-shadow: 6px 6px 0px #111111 !important;
+  color: #111111 !important;
+  background-color: #FFFFFF !important;
+}
+
+/* Badges / Pill Tags (Max 4px radius) */
+.brutal-tag {
+  display: inline-block;
+  border: 2px solid #111111;
+  border-radius: 4px;
+  padding: 2px 8px;
+  font-size: 0.75rem;
+  font-weight: 800;
+  text-transform: uppercase;
+  background-color: #FFD23F;
+  color: #111111;
+}
+
+/* Footer Control Room Watermark */
+.control-room-footer {
+  border-top: 3px solid #111111;
+  padding-top: 14px;
+  margin-top: 30px;
+  font-family: 'FiraCodeLocal', monospace;
+  font-size: 0.85rem;
+  font-weight: 700;
+  text-transform: uppercase;
+  color: #111111;
+  display: flex;
+  justify-content: space-between;
+}

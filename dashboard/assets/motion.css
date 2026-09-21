@@ -1,0 +1,64 @@
+/* ==========================================================================
+   NEO-BRUTALIST INDUSTRIAL MOTION & MICRO-INTERACTIONS
+   Sharp mechanical transitions, crisp physical depression, no soft blurs
+   ========================================================================== */
+
+/* Mechanical Button / Card Click Depression */
+.brutal-btn,
+button[kind="primary"],
+button[kind="secondary"],
+.stButton > button {
+  transition: transform 0.08s ease, box-shadow 0.08s ease !important;
+}
+
+.brutal-btn:hover,
+.stButton > button:hover {
+  transform: translate(-2px, -2px) !important;
+  box-shadow: 8px 8px 0px #111111 !important;
+}
+
+.brutal-btn:active,
+.stButton > button:active {
+  transform: translate(3px, 3px) !important;
+  box-shadow: 3px 3px 0px #111111 !important;
+}
+
+/* Interactive Card Hover Feedback */
+.brutal-card-hover {
+  transition: transform 0.1s ease, box-shadow 0.1s ease !important;
+}
+
+.brutal-card-hover:hover {
+  transform: translate(-2px, -2px) !important;
+  box-shadow: 8px 8px 0px #111111 !important;
+}
+
+/* Critical Industrial Alarm Strobe (Hard Color Inversion, No Blur) */
+@keyframes industrial-alarm-strobe {
+  0%, 49% {
+    background-color: #FF5A5F;
+    color: #FFFFFF;
+  }
+  50%, 100% {
+    background-color: #111111;
+    color: #FF5A5F;
+  }
+}
+
+.status-critical-strobe {
+  animation: industrial-alarm-strobe 1s infinite steps(1) !important;
+}
+
+/* Mechanical Status Pulse */
+@keyframes mechanical-blink {
+  0%, 49% {
+    opacity: 1.0;
+  }
+  50%, 100% {
+    opacity: 0.2;
+  }
+}
+
+.status-beacon-pulse {
+  animation: mechanical-blink 0.8s infinite steps(1) !important;
+}
