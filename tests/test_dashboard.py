@@ -156,3 +156,99 @@ def test_mode_gating_monitoring_state():
     res = build_detection_result(df.iloc[0], df, weights=weights)
 
     assert res.alert_state == AlertState.MONITORING.value
+
+
+def test_compute_npw_replay_data():
+    """Verifies acoustic wave arrival times, delta arrival times, and localization formula."""
+    from dashboard.app import compute_npw_replay_data
+
+    # Test leak at 78.0 km
+    npw_info = compute_npw_replay_data(leak_km=78.0, wave_speed_km_s=1.0)
+
+    assert npw_info["leak_km"] == 78.0
+    assert npw_info["wave_speed"] == 1.0
+
+    # Check arrival times at S4 (60 km, dist=18 km) and S5 (80 km, dist=2 km)
+    assert npw_info["arrivals"]["S4"]["t_arr"] == 18.0
+    assert npw_info["arrivals"]["S5"]["t_arr"] == 2.0
+    assert npw_info["pair"] == ("S4", "S5")
+    assert npw_info["delta_t"] == -16.0
+    assert npw_info["calculated_km"] == 78.0
+    assert "x_L =" in npw_info["formula"]
+
+
+def test_get_presenter_commentary():
+    """Verifies that rich engineering commentary is generated for all scenarios."""
+    from dashboard.app import get_presenter_commentary
+
+    scenarios = [
+        "1. NORMAL",
+        "2. SMALL CHRONIC LEAK",
+        "3. LARGE LEAK",
+        "4. PUMP TRANSIENT",
+        "5. VALVE EVENT"
+    ]
+
+    for sc in scenarios:
+        comment_early = get_presenter_commentary(sc, t=20.0)
+        comment_late = get_presenter_commentary(sc, t=55.0)
+        assert len(comment_early) > 20
+        assert len(comment_late) > 20
+        assert "T=" in comment_early
+
+
+def test_pipeline_flow_motion_classes(sample_detection_result):
+    """Verifies that render_pipeline_svg selects proper flow animation classes according to flow rate and mode."""
+    # 1. Normal flowing (500 m3/h)
+    svg_flowing = render_pipeline_svg(sample_detection_result, motion_mode="FULL")
+    assert "flow-flowing" in svg_flowing
+
+    # 2. Ramping flow (>550 m3/h)
+    ramping_res = DetectionResult(
+        timestamp=sample_detection_result.timestamp,
+        mode="Ramping_Operation",
+        pressures=sample_detection_result.pressures,
+        flow_in=620.0,
+        flow_out=600.0,
+        flow_imbalance_raw=20.0,
+        flow_imbalance_corrected=10.0,
+        anomaly_score=0.2,
+        flow_evidence=0.1,
+        npw_evidence=0.0,
+        pressure_evidence=0.1,
+        fusion_confidence=15.0,
+        contributions={},
+        alert_state=AlertState.MONITORING.value,
+        persistence=0
+    )
+    svg_ramping = render_pipeline_svg(ramping_res, motion_mode="FULL")
+    assert "flow-ramping" in svg_ramping
+
+    # 3. Shut-in mode (0 flow)
+    shutin_res = DetectionResult(
+        timestamp=sample_detection_result.timestamp,
+        mode="SHUT-IN",
+        pressures=sample_detection_result.pressures,
+        flow_in=0.0,
+        flow_out=0.0,
+        flow_imbalance_raw=0.0,
+        flow_imbalance_corrected=0.0,
+        anomaly_score=0.05,
+        flow_evidence=0.0,
+        npw_evidence=0.0,
+        pressure_evidence=0.0,
+        fusion_confidence=5.0,
+        contributions={},
+        alert_state=AlertState.MONITORING.value,
+        persistence=0
+    )
+    svg_shutin = render_pipeline_svg(shutin_res, motion_mode="FULL")
+    assert "flow-shutin" in svg_shutin
+
+    # 4. Motion OFF mode
+    svg_off = render_pipeline_svg(sample_detection_result, motion_mode="OFF")
+    assert "flow-shutin" in svg_off
+
+    # 5. NPW Replay ripples
+    svg_npw = render_pipeline_svg(sample_detection_result, motion_mode="FULL", npw_replay_active=True)
+    assert "acoustic-ripple" in svg_npw

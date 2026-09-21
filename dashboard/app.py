@@ -2,6 +2,7 @@
 Streamlit Control Room Dashboard for Oil Pipeline Intelligent Monitoring.
 Industrial Edge AI Leak Detection System (ZEDEDA / EVE-OS Compatible).
 Strictly consumes immutable DetectionResult contract under Neo-Brutalist design system.
+Phase 8: Motion & Micro-Interactions + Live Presenter Mode.
 
 Run with:
   streamlit run dashboard/app.py
@@ -9,8 +10,9 @@ Run with:
 
 import os
 import sys
+import time
 import platform
-from typing import Dict, Any, Optional
+from typing import Dict, Any, Optional, Tuple
 
 # pyrefly: ignore [missing-import]
 import numpy as np
@@ -37,7 +39,7 @@ st.set_page_config(
 )
 
 
-def load_control_room_assets():
+def load_control_room_assets(motion_mode: str = "FULL"):
     """Injects Neo-Brutalist design tokens, motion animations, and styling."""
     assets_dir = os.path.join(os.path.dirname(__file__), "assets")
     css_files = ["tokens.css", "motion.css", "style.css"]
@@ -47,11 +49,27 @@ def load_control_room_assets():
         if os.path.exists(path):
             with open(path, "r", encoding="utf-8") as f:
                 combined_css.append(f.read())
+    
+    # Motion mode overrides
+    if motion_mode == "OFF":
+        combined_css.append("""
+            *, .oil-flow-line, .hazard-stripe-active, .status-critical-pulse, .acoustic-ripple {
+                animation: none !important;
+                transition: none !important;
+            }
+        """)
+    elif motion_mode == "REDUCED":
+        combined_css.append("""
+            *, .oil-flow-line, .hazard-stripe-active, .acoustic-ripple {
+                animation: none !important;
+            }
+            * {
+                transition-duration: 0.1s !important;
+            }
+        """)
+
     if combined_css:
         st.markdown(f"<style>\n{chr(10).join(combined_css)}\n</style>", unsafe_allow_html=True)
-
-
-load_control_room_assets()
 
 
 def style_brutalist_chart(fig, title: str = "", height: int = 280, showlegend: bool = True):
@@ -107,12 +125,134 @@ def style_brutalist_chart(fig, title: str = "", height: int = 280, showlegend: b
     return fig
 
 
-def render_pipeline_svg(result: DetectionResult, gt_km: Optional[float] = None) -> str:
+def compute_npw_replay_data(leak_km: float, wave_speed_km_s: float = 1.0) -> Dict[str, Any]:
+    """
+    Computes acoustic NPW arrival times, delta arrival times, and formula breakdown for all 6 stations.
+    """
+    st_km = [0.0, 20.0, 40.0, 60.0, 80.0, 100.0]
+    arrivals = {}
+    for i, km in enumerate(st_km):
+        dist = abs(km - leak_km)
+        t_arr = dist / wave_speed_km_s
+        arrivals[f"S{i+1}"] = {"km": km, "dist": round(dist, 1), "t_arr": round(t_arr, 2)}
+
+    # Find straddling station pair
+    left_idx = 0
+    right_idx = len(st_km) - 1
+    for i in range(len(st_km) - 1):
+        if st_km[i] <= leak_km <= st_km[i + 1]:
+            left_idx = i
+            right_idx = i + 1
+            break
+
+    st_a_name = f"S{left_idx + 1}"
+    st_b_name = f"S{right_idx + 1}"
+    x_a = st_km[left_idx]
+    x_b = st_km[right_idx]
+    t_a = arrivals[st_a_name]["t_arr"]
+    t_b = arrivals[st_b_name]["t_arr"]
+    delta_t = round(t_b - t_a, 2)
+
+    # Localization calculation:
+    # x_L = (x_a + x_b - v * dt) / 2
+    calc_leak = (x_a + x_b - wave_speed_km_s * delta_t) / 2.0
+
+    return {
+        "leak_km": leak_km,
+        "wave_speed": wave_speed_km_s,
+        "arrivals": arrivals,
+        "pair": (st_a_name, st_b_name),
+        "pair_coords": (x_a, x_b),
+        "pair_times": (t_a, t_b),
+        "delta_t": delta_t,
+        "calculated_km": round(calc_leak, 2),
+        "formula": f"x_L = ({x_a:.0f} + {x_b:.0f} - ({wave_speed_km_s:.1f} × ({delta_t:+.2f}s))) / 2 = {calc_leak:.1f} km"
+    }
+
+
+def get_presenter_commentary(scenario_name: str, t: float) -> str:
+    """Returns rich control room commentary for the active scenario and timeline position."""
+    sc = scenario_name.upper()
+    if "NORMAL" in sc:
+        return (
+            f"**T={t:.1f}s [STEADY NOMINAL OPERATION]**: All 6 monitoring stations report hydraulic gradient equilibrium. "
+            "Inlet flow (500 m³/h) matches outlet flow within ±0.2 m³/h. Isolation Forest anomaly score is ~0.05. "
+            "No acoustic drop wavefronts observed. Pipeline integrity is verified nominal."
+        )
+    elif "SMALL" in sc:
+        if t < 40.0:
+            return (
+                f"**T={t:.1f}s [BASELINE STATE]**: Pipeline operating under normal flowing conditions prior to pinhole orifice formation."
+            )
+        elif t < 70.0:
+            return (
+                f"**T={t:.1f}s [CHRONIC PINHOLE LEAK ONSET (~16 m³/h)]**: Leak active at 57.0 km. "
+                "Notice the gradual accumulation of line-pack corrected flow imbalance (~16 m³/h). "
+                "Because orifice opening was gradual, no acoustic NPW shockwave was produced (NPW Score: 0%)."
+            )
+        else:
+            return (
+                f"**T={t:.1f}s [SUSTAINED FLOW IMBALANCE DETECTION]**: Fused confidence climbs based on mass imbalance (35% weight) "
+                "and subtle hydraulic slope change (20% weight). System triggers advisory warning without acoustic wavefront confirmation."
+            )
+    elif "LARGE" in sc:
+        if t < 40.0:
+            return (
+                f"**T={t:.1f}s [NOMINAL STEADY STATE]**: Pre-event baseline at 500 m³/h, 60 bar inlet."
+            )
+        elif t <= 45.0:
+            return (
+                f"**T={t:.1f}s [NPW RUPTURE EVENT AT 78.0 KM]**: Sudden physical rupture creates negative pressure wave traveling at 1000 m/s! "
+                "Acoustic wave hits Station 5 (80 km) in 2.0s and Station 4 (60 km) in 18.0s. "
+                "Arrival delta time (Δt = -16.0s) precisely triangulates leak origin at 78.0 km."
+            )
+        else:
+            return (
+                f"**T={t:.1f}s [CONFIRMED CRITICAL LEAK ALARM]**: Severe flow mass deficit (>30 m³/h) and steep hydraulic kink. "
+                "All 4 evidence channels corroborate breach. Fused confidence exceeds 65% threshold. "
+                "Emergency pipeline segment isolation advised."
+            )
+    elif "PUMP" in sc:
+        if t < 40.0:
+            return (
+                f"**T={t:.1f}s [PRE-RAMP BASELINE]**: Normal centrifugal pump operation."
+            )
+        elif t <= 75.0:
+            return (
+                f"**T={t:.1f}s [PUMP TRANSIENT SURGE]**: Centrifugal pump ramp produces massive pressure wave (>70 bar) and flow surge. "
+                "**Mode Gating** identifies operational transient regime and caps fused confidence to prevent false emergency shutdown!"
+            )
+        else:
+            return (
+                f"**T={t:.1f}s [TRANSIENT STABILIZATION]**: Operating mode returns toward steady-state. System remains in MONITORING state."
+            )
+    else:  # VALVE
+        if t < 40.0:
+            return (
+                f"**T={t:.1f}s [PRE-THROTTLE BASELINE]**: Pipeline running at steady 500 m³/h."
+            )
+        elif t <= 75.0:
+            return (
+                f"**T={t:.1f}s [VALVE THROTTLING EVENT]**: Downstream valve closure creates upstream pressure accumulation and downstream drop. "
+                "Mass balance is maintained. Multi-sensor fusion suppresses false leak alarm."
+            )
+        else:
+            return (
+                f"**T={t:.1f}s [NEW HYDRAULIC EQUILIBRIUM]**: Pipeline operating at throttled flow rate. Monitoring state maintained."
+            )
+
+
+def render_pipeline_svg(
+    result: DetectionResult,
+    gt_km: Optional[float] = None,
+    motion_mode: str = "FULL",
+    npw_replay_active: bool = False
+) -> str:
     """
     Renders an inline SVG pipeline schematic:
     S1 ━━━ S2 ━━━ S3 ━━━ S4 ━━━ S5 ━━━ S6
     With station positions, live pressure values, highlighted segments,
-    and estimated/ground truth leak markers.
+    flow movement animation, and estimated/ground truth leak markers.
     """
     st_km = [0.0, 20.0, 40.0, 60.0, 80.0, 100.0]
     x_left = 65.0
@@ -123,6 +263,17 @@ def render_pipeline_svg(result: DetectionResult, gt_km: Optional[float] = None) 
         return x_left + (km / 100.0) * x_span
 
     st_xs = [km_to_x(km) for km in st_km]
+
+    # Flow animation class
+    if motion_mode in ["OFF", "REDUCED"]:
+        flow_anim_class = "flow-shutin"
+    else:
+        if result.mode.upper() in ["SHUT-IN", "SHUTIN"] or result.flow_in <= 5.0:
+            flow_anim_class = "flow-shutin"
+        elif "RAMPING" in result.mode.upper() or result.flow_in > 550.0:
+            flow_anim_class = "flow-ramping"
+        else:
+            flow_anim_class = "flow-flowing"
 
     # Pipeline Segments
     seg_elements = []
@@ -148,6 +299,8 @@ def render_pipeline_svg(result: DetectionResult, gt_km: Optional[float] = None) 
         seg_elements.append(f'''
             <line x1="{seg_x1}" y1="{y_pipe}" x2="{seg_x2}" y2="{y_pipe}" stroke="#111111" stroke-width="14" stroke-linecap="square"/>
             <line x1="{seg_x1}" y1="{y_pipe}" x2="{seg_x2}" y2="{y_pipe}" stroke="{core_color}" stroke-width="6"/>
+            <!-- Animated oil dashes representing physical flow -->
+            <line x1="{seg_x1}" y1="{y_pipe}" x2="{seg_x2}" y2="{y_pipe}" stroke="#111111" stroke-width="3" class="oil-flow-line {flow_anim_class}"/>
             <text x="{(seg_x1 + seg_x2)/2}" y="{y_pipe + 26}" font-family="monospace" font-weight="900" font-size="10" fill="#111111" text-anchor="middle">SEG {i+1} ({int(seg_start_km)}-{int(seg_end_km)}km)</text>
         ''')
 
@@ -167,16 +320,28 @@ def render_pipeline_svg(result: DetectionResult, gt_km: Optional[float] = None) 
             <text x="{x}" y="{y_pipe + 46}" font-family="monospace" font-weight="700" font-size="10" fill="#111111" text-anchor="middle">{int(st_km[i])} KM</text>
         ''')
 
-    # Estimated Leak Beacon
+    # Estimated Leak Beacon & NPW acoustic wave ripples
     leak_elements = []
-    if result.leak_km is not None:
-        lx = km_to_x(result.leak_km)
-        leak_elements.append(f'''
-            <polygon points="{lx - 12},{y_pipe - 22} {lx + 12},{y_pipe - 22} {lx},{y_pipe - 4}" fill="#FF5A5F" stroke="#111111" stroke-width="3"/>
-            <rect x="{lx - 55 + 4}" y="{y_pipe - 78 + 4}" width="110" height="26" fill="#111111" />
-            <rect x="{lx - 55}" y="{y_pipe - 78}" width="110" height="26" fill="#FF5A5F" stroke="#111111" stroke-width="3" />
-            <text x="{lx}" y="{y_pipe - 61}" font-family="monospace" font-weight="900" font-size="11" fill="#FFFFFF" text-anchor="middle">EST: {result.leak_km:.1f} KM</text>
-        ''')
+    active_leak_km = result.leak_km if result.leak_km is not None else (gt_km if gt_km is not None else None)
+    
+    if active_leak_km is not None:
+        lx = km_to_x(active_leak_km)
+        
+        # NPW Acoustic wave ripples if replay active
+        if npw_replay_active and motion_mode != "OFF":
+            leak_elements.append(f'''
+                <circle cx="{lx}" cy="{y_pipe}" r="12" fill="none" stroke="#FF5A5F" class="acoustic-ripple" />
+                <circle cx="{lx}" cy="{y_pipe}" r="28" fill="none" stroke="#FF5A5F" class="acoustic-ripple" style="animation-delay: 0.5s !important;" />
+                <circle cx="{lx}" cy="{y_pipe}" r="48" fill="none" stroke="#FF5A5F" class="acoustic-ripple" style="animation-delay: 1.0s !important;" />
+            ''')
+
+        if result.leak_km is not None:
+            leak_elements.append(f'''
+                <polygon points="{lx - 12},{y_pipe - 22} {lx + 12},{y_pipe - 22} {lx},{y_pipe - 4}" fill="#FF5A5F" stroke="#111111" stroke-width="3"/>
+                <rect x="{lx - 55 + 4}" y="{y_pipe - 78 + 4}" width="110" height="26" fill="#111111" />
+                <rect x="{lx - 55}" y="{y_pipe - 78}" width="110" height="26" fill="#FF5A5F" stroke="#111111" stroke-width="3" />
+                <text x="{lx}" y="{y_pipe - 61}" font-family="monospace" font-weight="900" font-size="11" fill="#FFFFFF" text-anchor="middle">EST: {result.leak_km:.1f} KM</text>
+            ''')
 
     # Ground Truth Beacon (if present)
     gt_elements = []
@@ -355,32 +520,33 @@ def load_scenario_detection_results(scenario_name: str, seed: int = 42) -> pd.Da
 
 
 def main():
-    # Session state for operator alert acknowledgement
+    # Initialize session states
     if "alert_acknowledged" not in st.session_state:
         st.session_state["alert_acknowledged"] = False
         st.session_state["ack_timestamp"] = None
         st.session_state["ack_state"] = None
 
-    # ==================================================
-    # 1. HEADER
-    # ==================================================
-    st.markdown("""
-    <div class="industrial-header-box">
-        <div>
-            <h1>OIL PIPELINE / INTELLIGENT MONITORING</h1>
-            <div class="subtext">EDGE AI &bull; LEAK DETECTION &bull; ZEDEDA</div>
-        </div>
-        <div class="header-badges">
-            <div class="badge-online">● SYSTEM ONLINE</div>
-            <div class="badge-node">EDGE NODE: OIL-PIPE</div>
-        </div>
-    </div>
-    """, unsafe_allow_html=True)
+    if "npw_replay_active" not in st.session_state:
+        st.session_state["npw_replay_active"] = False
+
+    if "presenter_playing" not in st.session_state:
+        st.session_state["presenter_playing"] = False
+
+    if "timeline_t" not in st.session_state:
+        st.session_state["timeline_t"] = 50.0
 
     # ==================================================
-    # SIDEBAR CONTROLS
+    # SIDEBAR: MOTION SETTINGS & SIMULATION CONTROLS
     # ==================================================
-    st.sidebar.header("⚙️ SIMULATION CONTROLS")
+    st.sidebar.header("🎬 MOTION & DISPLAY SETTINGS")
+    motion_mode = st.sidebar.selectbox("Motion Mode:", ["FULL", "REDUCED", "OFF"], index=0)
+    st.sidebar.caption("Also honors browser `prefers-reduced-motion` settings.")
+
+    # Inject CSS with active motion mode
+    load_control_room_assets(motion_mode=motion_mode)
+
+    st.sidebar.markdown("---")
+    st.sidebar.header("⚙️ SCENARIO SELECTION")
 
     scenario_options = [
         "FULL 600s TIMELINE (Original)",
@@ -390,20 +556,27 @@ def main():
         "4. PUMP TRANSIENT (Surge with Mode Gating)",
         "5. VALVE EVENT (Throttling Transient)"
     ]
-    selected_scenario = st.sidebar.selectbox("Demonstration Scenario:", scenario_options, index=3)
+    selected_scenario = st.sidebar.selectbox("Active Demonstration:", scenario_options, index=3)
 
     df = load_scenario_detection_results(selected_scenario)
-
     max_t = float(df["timestamp"].max())
-    default_val = 540.0 if "FULL" in selected_scenario else min(50.0, max_t)
+
+    # Timeline scrubber
     selected_t = st.sidebar.slider(
         "Playback Timeline (seconds):",
         min_value=0.0,
         max_value=max_t,
-        value=float(default_val),
+        value=float(min(max_t, max(0.0, st.session_state["timeline_t"]))),
         step=0.5
     )
+    st.session_state["timeline_t"] = selected_t
 
+    # Presenter mode toggle
+    st.sidebar.markdown("---")
+    presenter_active = st.sidebar.checkbox("🎙️ ACTIVATE PRESENTER MODE", value=st.session_state.get("presenter_active", False))
+    st.session_state["presenter_active"] = presenter_active
+
+    # Configurable Evidence Weights
     st.sidebar.markdown("---")
     st.sidebar.subheader("⚖️ Evidence Fusion Weights")
     w_ml = st.sidebar.slider("ML Anomaly Weight", 0.0, 1.0, 0.30, 0.05)
@@ -435,6 +608,69 @@ def main():
 
     # Build DetectionResult contract instance
     result: DetectionResult = build_detection_result(current_row, df, weights=custom_weights)
+
+    # ==================================================
+    # 1. HEADER
+    # ==================================================
+    st.markdown("""
+    <div class="industrial-header-box">
+        <div>
+            <h1>OIL PIPELINE / INTELLIGENT MONITORING</h1>
+            <div class="subtext">EDGE AI &bull; LEAK DETECTION &bull; ZEDEDA</div>
+        </div>
+        <div class="header-badges">
+            <div class="badge-online">● SYSTEM ONLINE</div>
+            <div class="badge-node">EDGE NODE: OIL-PIPE</div>
+        </div>
+    </div>
+    """, unsafe_allow_html=True)
+
+    # ==================================================
+    # PRESENTER MODE CONTROLLER (If Active)
+    # ==================================================
+    if presenter_active:
+        st.markdown('<div class="presenter-box">', unsafe_allow_html=True)
+        st.markdown("### 🎙️ PRESENTER CONTROLLER")
+
+        p_c1, p_c2, p_c3, p_c4, p_c5 = st.columns([1.2, 1, 1.2, 1, 2.6])
+        with p_c1:
+            if st.session_state["presenter_playing"]:
+                if st.button("⏸ PAUSE", key="pres_pause_btn", use_container_width=True):
+                    st.session_state["presenter_playing"] = False
+                    st.rerun()
+            else:
+                if st.button("▶ PLAY", key="pres_play_btn", use_container_width=True):
+                    st.session_state["presenter_playing"] = True
+                    st.rerun()
+
+        with p_c2:
+            speed_val = st.selectbox("Speed:", ["1x", "2x", "4x"], index=0, key="pres_speed_choice")
+            speed_mult = 1.0 if speed_val == "1x" else (2.0 if speed_val == "2x" else 4.0)
+
+        with p_c3:
+            if st.button("⏭ STEP (+2s)", key="pres_step_btn", use_container_width=True):
+                st.session_state["presenter_playing"] = False
+                st.session_state["timeline_t"] = min(max_t, selected_t + 2.0)
+                st.rerun()
+
+        with p_c4:
+            if st.button("⏮ RESET", key="pres_reset_btn", use_container_width=True):
+                st.session_state["presenter_playing"] = False
+                st.session_state["timeline_t"] = 0.0
+                st.rerun()
+
+        with p_c5:
+            st.markdown(
+                f'<div style="background-color:#FFFFFF; border:2px solid #111111; padding:8px 12px; font-weight:900; font-family:monospace; text-align:center;">'
+                f'TIMELINE: {selected_t:.1f}s / {max_t:.1f}s'
+                f'</div>',
+                unsafe_allow_html=True
+            )
+
+        # Real-time control room commentary
+        commentary_text = get_presenter_commentary(selected_scenario, selected_t)
+        st.markdown(f'<div class="presenter-commentary">💬 <strong>CONTROL ROOM LOG:</strong> {commentary_text}</div>', unsafe_allow_html=True)
+        st.markdown('</div>', unsafe_allow_html=True)
 
     # ==================================================
     # 2. 6 KPI CARDS
@@ -486,27 +722,97 @@ def main():
         )
 
     # ==================================================
-    # 3. PIPELINE MAP (INLINE SVG)
+    # 3. PIPELINE MAP (INLINE SVG) & NPW REPLAY
     # ==================================================
-    st.markdown("### 📍 PIPELINE SPATIAL MAP (100 KM)")
+    map_head_col, npw_btn_col = st.columns([3, 1])
+    with map_head_col:
+        st.markdown("### 📍 PIPELINE SPATIAL MAP (100 KM)")
+    with npw_btn_col:
+        npw_active = st.session_state.get("npw_replay_active", False)
+        btn_label = "⏹ STOP REPLAY" if npw_active else "▶ REPLAY NPW"
+        if st.button(btn_label, key="npw_toggle_button", use_container_width=True):
+            st.session_state["npw_replay_active"] = not npw_active
+            st.rerun()
+
     gt_km = current_row.get("ground_truth_km")
-    svg_map_html = render_pipeline_svg(result, gt_km=gt_km)
+    svg_map_html = render_pipeline_svg(
+        result,
+        gt_km=gt_km,
+        motion_mode=motion_mode,
+        npw_replay_active=st.session_state.get("npw_replay_active", False)
+    )
     st.markdown(svg_map_html, unsafe_allow_html=True)
+
+    # NPW REPLAY ACOUSTIC ANALYSIS PANEL (When Active)
+    if st.session_state.get("npw_replay_active", False):
+        origin_leak_km = result.leak_km if result.leak_km is not None else (gt_km if gt_km is not None else 78.0)
+        npw_data = compute_npw_replay_data(origin_leak_km, wave_speed_km_s=1.0)
+
+        st.markdown(f'''
+        <div class="npw-replay-box">
+            <div style="display:flex; justify-content:space-between; align-items:center; flex-wrap:wrap; border-bottom:3px solid #111111; padding-bottom:10px; margin-bottom:14px;">
+                <div style="font-size:1.25rem; font-weight:900;">🔊 NEGATIVE PRESSURE WAVE (NPW) REPLAY ENGINE</div>
+                <div class="brutal-tag" style="background-color:#FFD23F; font-size:0.9rem; padding:4px 10px;">⚠️ TIME NOT TO SCALE</div>
+            </div>
+            <div style="display:grid; grid-template-columns: repeat(auto-fit, minmax(130px, 1fr)); gap:10px; margin-bottom:14px;">
+                <div class="alert-field">
+                    <div class="alert-field-label">STATION 1 (0km)</div>
+                    <div class="alert-field-value">{npw_data['arrivals']['S1']['t_arr']:.1f} s</div>
+                </div>
+                <div class="alert-field">
+                    <div class="alert-field-label">STATION 2 (20km)</div>
+                    <div class="alert-field-value">{npw_data['arrivals']['S2']['t_arr']:.1f} s</div>
+                </div>
+                <div class="alert-field">
+                    <div class="alert-field-label">STATION 3 (40km)</div>
+                    <div class="alert-field-value">{npw_data['arrivals']['S3']['t_arr']:.1f} s</div>
+                </div>
+                <div class="alert-field" style="border:3px solid #111111; background-color:#FFD23F;">
+                    <div class="alert-field-label">★ STATION 4 (60km)</div>
+                    <div class="alert-field-value">{npw_data['arrivals']['S4']['t_arr']:.1f} s</div>
+                </div>
+                <div class="alert-field" style="border:3px solid #111111; background-color:#FFD23F;">
+                    <div class="alert-field-label">★ STATION 5 (80km)</div>
+                    <div class="alert-field-value">{npw_data['arrivals']['S5']['t_arr']:.1f} s</div>
+                </div>
+                <div class="alert-field">
+                    <div class="alert-field-label">STATION 6 (100km)</div>
+                    <div class="alert-field-value">{npw_data['arrivals']['S6']['t_arr']:.1f} s</div>
+                </div>
+            </div>
+            <div style="background-color:#F4F1DE; border:2px solid #111111; padding:12px; margin-bottom:12px;">
+                <div style="font-weight:900; font-size:0.9rem; margin-bottom:4px;">ACOUSTIC LOCALIZATION MATHEMATICS:</div>
+                <div style="font-family:monospace; font-size:1.0rem; font-weight:800;">
+                    Formula: x_L = [x_A + x_B - v_wave × (t_B - t_A)] / 2
+                </div>
+                <div style="font-family:monospace; font-size:0.95rem; margin-top:4px;">
+                    Calculation: {npw_data['formula']}
+                </div>
+                <div style="font-size:0.85rem; font-weight:700; color:#333; margin-top:6px;">
+                    Δt between {npw_data['pair'][0]} and {npw_data['pair'][1]}: <strong>{npw_data['delta_t']:+.2f} seconds</strong> (Acoustic Wave Speed: <strong>1.0 km/s = 1000 m/s</strong>)
+                </div>
+            </div>
+        </div>
+        ''', unsafe_allow_html=True)
 
     # ==================================================
     # 4. ALERT PANEL
     # ==================================================
     st.markdown("### 🚨 REAL-TIME ALERT PANEL")
 
-    # Determine badge style
+    # Determine badge style & motion class
     if result.alert_state == AlertState.CRITICAL.value:
         badge_html = '<div class="status-badge status-critical status-critical-strobe">[■ ALARM] CRITICAL</div>'
+        alert_motion_class = "status-critical-pulse" if motion_mode != "OFF" else ""
     elif result.alert_state == AlertState.WARNING.value:
         badge_html = '<div class="status-badge status-warning">[▲ WARN] WARNING</div>'
+        alert_motion_class = "hazard-stripe-active" if motion_mode != "OFF" else ""
     elif result.alert_state == AlertState.MONITORING.value:
         badge_html = '<div class="status-badge status-monitoring">[◆ CHK] MONITORING</div>'
+        alert_motion_class = ""
     else:
         badge_html = '<div class="status-badge status-normal">[● OK] NORMAL</div>'
+        alert_motion_class = "alert-state-normal"
 
     rec_action = current_row.get("recommended_action", "NORMAL OPERATION: All parameters within standard operational baseline.")
 
@@ -515,7 +821,7 @@ def main():
         st.session_state["alert_acknowledged"] = False
 
     alert_panel_html = f'''
-    <div class="alert-panel">
+    <div class="alert-panel {alert_motion_class}">
         <div style="display: flex; justify-content: space-between; align-items: center; flex-wrap: wrap; gap: 12px;">
             <div style="font-size: 1.25rem; font-weight: 900;">ALERT DISPATCH CONTROLLER</div>
             <div>{badge_html}</div>
@@ -615,16 +921,36 @@ def main():
         st.progress(min(1.0, max(0.0, result.pressure_evidence)))
         st.markdown(f"Raw: **{result.pressure_evidence*100:.1f}%** &bull; Weighted Contribution: **+{result.contributions['pressure']:.1f}%**")
 
-        st.markdown("---")
-        # Fusion Summary
-        st.markdown(
-            f'<div style="background-color:#F4F1DE; border:2px solid #111111; padding:10px; margin-top:8px;">'
-            f'<div style="font-size:0.8rem; font-weight:900;">FUSION EVIDENCE SUM</div>'
-            f'<div style="font-size:1.6rem; font-weight:900; color:#111111;">{result.fusion_confidence:.1f}%</div>'
-            f'<div style="font-size:0.75rem; font-weight:700; color:#444;">Threshold: Suspect 35% | Critical 65%</div>'
-            f'</div>',
-            unsafe_allow_html=True
-        )
+        # FUSION WATERFALL BREAKDOWN
+        st.markdown(f'''
+        <div style="background-color: #FFFFFF; border: 2px solid #111111; padding: 12px; margin-top: 14px;">
+            <div style="font-weight: 900; font-size: 0.85rem; margin-bottom: 8px;">FUSION EVIDENCE WATERFALL</div>
+            <div class="waterfall-row">
+                <span style="width:130px;">1. ML ANOMALY</span>
+                <div class="waterfall-track"><div class="waterfall-fill" style="width: {min(100.0, result.contributions['ml'])}%; background-color: #FFD23F;"></div></div>
+                <span style="width:50px; text-align:right;">+{result.contributions['ml']:.1f}%</span>
+            </div>
+            <div class="waterfall-row">
+                <span style="width:130px;">2. FLOW IMBALANCE</span>
+                <div class="waterfall-track"><div class="waterfall-fill" style="width: {min(100.0, result.contributions['flow'])}%; background-color: #4D96FF;"></div></div>
+                <span style="width:50px; text-align:right;">+{result.contributions['flow']:.1f}%</span>
+            </div>
+            <div class="waterfall-row">
+                <span style="width:130px;">3. NPW FRONT</span>
+                <div class="waterfall-track"><div class="waterfall-fill" style="width: {min(100.0, result.contributions['npw'])}%; background-color: #FF5A5F;"></div></div>
+                <span style="width:50px; text-align:right;">+{result.contributions['npw']:.1f}%</span>
+            </div>
+            <div class="waterfall-row">
+                <span style="width:130px;">4. PRESSURE GRAD</span>
+                <div class="waterfall-track"><div class="waterfall-fill" style="width: {min(100.0, result.contributions['pressure'])}%; background-color: #35D07F;"></div></div>
+                <span style="width:50px; text-align:right;">+{result.contributions['pressure']:.1f}%</span>
+            </div>
+            <div style="border-top: 2px solid #111111; margin-top: 8px; padding-top: 6px; display: flex; justify-content: space-between; font-weight: 900;">
+                <span>TOTAL FUSED CONFIDENCE</span>
+                <span style="color: {'#FF5A5F' if result.fusion_confidence >= 65 else ('#111111' if result.fusion_confidence < 35 else '#D97706')};">{result.fusion_confidence:.1f}%</span>
+            </div>
+        </div>
+        ''', unsafe_allow_html=True)
 
         # Transparent Explanation
         st.markdown("#### 💡 WHY DID THIS OCCUR?")
@@ -762,6 +1088,19 @@ def main():
         <div><strong>Prototype &bull; Synthetic Data &bull; Edge AI</strong></div>
     </div>
     """, unsafe_allow_html=True)
+
+    # ==================================================
+    # PRESENTER MODE AUTO-PLAY STEPPING
+    # ==================================================
+    if presenter_active and st.session_state.get("presenter_playing", False):
+        if selected_t < max_t:
+            time.sleep(0.25)
+            next_t = min(max_t, selected_t + (1.5 * speed_mult))
+            st.session_state["timeline_t"] = next_t
+            st.rerun()
+        else:
+            st.session_state["presenter_playing"] = False
+            st.rerun()
 
 
 if __name__ == "__main__":

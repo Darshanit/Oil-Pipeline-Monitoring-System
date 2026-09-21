@@ -1,9 +1,48 @@
 /* ==========================================================================
    NEO-BRUTALIST INDUSTRIAL MOTION & MICRO-INTERACTIONS
-   Sharp mechanical transitions, crisp physical depression, no soft blurs
+   Sharp mechanical transitions, crisp physical depression, no soft blurs.
+   Motion represents real physical data.
    ========================================================================== */
 
-/* Mechanical Button / Card Click Depression */
+/* 1. Accessibility: Honor prefers-reduced-motion */
+@media (prefers-reduced-motion: reduce) {
+  *, ::before, ::after {
+    animation-duration: 0.01ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.01ms !important;
+    scroll-behavior: auto !important;
+  }
+  .oil-flow-line,
+  .hazard-stripe-active,
+  .status-critical-pulse,
+  .status-critical-strobe,
+  .acoustic-ripple {
+    animation: none !important;
+  }
+}
+
+/* 2. Motion Mode Toggles */
+.motion-off *,
+.motion-off .oil-flow-line,
+.motion-off .hazard-stripe-active,
+.motion-off .status-critical-pulse,
+.motion-off .status-critical-strobe,
+.motion-off .acoustic-ripple {
+  animation: none !important;
+  transition: none !important;
+}
+
+.motion-reduced * {
+  animation-duration: 0.01ms !important;
+  transition-duration: 0.1s !important;
+}
+.motion-reduced .oil-flow-line,
+.motion-reduced .hazard-stripe-active,
+.motion-reduced .acoustic-ripple {
+  animation: none !important;
+}
+
+/* 3. Mechanical Button / Card Click Depression */
 .brutal-btn,
 button[kind="primary"],
 button[kind="secondary"],
@@ -23,42 +62,103 @@ button[kind="secondary"],
   box-shadow: 3px 3px 0px #111111 !important;
 }
 
-/* Interactive Card Hover Feedback */
-.brutal-card-hover {
-  transition: transform 0.1s ease, box-shadow 0.1s ease !important;
-}
-
-.brutal-card-hover:hover {
-  transform: translate(-2px, -2px) !important;
-  box-shadow: 8px 8px 0px #111111 !important;
-}
-
-/* Critical Industrial Alarm Strobe (Hard Color Inversion, No Blur) */
-@keyframes industrial-alarm-strobe {
-  0%, 49% {
-    background-color: #FF5A5F;
-    color: #FFFFFF;
+/* 4. Real Pipeline Flow Animations (Data-Driven Speeds) */
+@keyframes oil-flow-right {
+  from {
+    stroke-dashoffset: 28;
   }
-  50%, 100% {
-    background-color: #111111;
-    color: #FF5A5F;
+  to {
+    stroke-dashoffset: 0;
   }
 }
 
-.status-critical-strobe {
-  animation: industrial-alarm-strobe 1s infinite steps(1) !important;
+.oil-flow-line {
+  stroke-dasharray: 14 14;
 }
 
-/* Mechanical Status Pulse */
-@keyframes mechanical-blink {
-  0%, 49% {
+/* Normal steady flow (~500 m³/h): 2.2s cycle */
+.flow-flowing {
+  animation: oil-flow-right 2.2s linear infinite !important;
+}
+
+/* Ramping flow (>550 m³/h): fast 1.0s cycle */
+.flow-ramping {
+  animation: oil-flow-right 1.0s linear infinite !important;
+}
+
+/* Shut-in flow (0 m³/h): frozen */
+.flow-shutin {
+  animation: none !important;
+  stroke-dashoffset: 0 !important;
+}
+
+/* 5. Alert Motion (Normal, Warning, Critical) */
+.alert-state-normal {
+  border-left: 10px solid #35D07F !important;
+}
+
+/* Warning state: Animated Industrial Hazard Stripes */
+@keyframes hazard-stripe-slide {
+  0% {
+    background-position: 0 0;
+  }
+  100% {
+    background-position: 48px 0;
+  }
+}
+
+.hazard-stripe-active {
+  background: repeating-linear-gradient(
+    -45deg,
+    #FFD23F,
+    #FFD23F 14px,
+    #111111 14px,
+    #111111 28px
+  ) !important;
+  background-size: 48px 48px !important;
+  animation: hazard-stripe-slide 2.5s linear infinite !important;
+}
+
+/* Critical state: Measured Industrial Alarm Pulse (1.2s cycle, non-flashing) */
+@keyframes industrial-alarm-pulse {
+  0%, 100% {
+    border-color: #111111;
+    box-shadow: 10px 10px 0px #111111;
+  }
+  50% {
+    border-color: #FF5A5F;
+    box-shadow: 10px 10px 0px #FF5A5F;
+  }
+}
+
+.status-critical-pulse {
+  animation: industrial-alarm-pulse 1.2s infinite ease-in-out !important;
+}
+
+/* 6. NPW Acoustic Wave Ripple Propagation */
+@keyframes acoustic-wave-expand {
+  0% {
+    r: 4px;
     opacity: 1.0;
+    stroke-width: 4px;
   }
-  50%, 100% {
-    opacity: 0.2;
+  50% {
+    r: 32px;
+    opacity: 0.7;
+    stroke-width: 3px;
+  }
+  100% {
+    r: 64px;
+    opacity: 0.0;
+    stroke-width: 1px;
   }
 }
 
-.status-beacon-pulse {
-  animation: mechanical-blink 0.8s infinite steps(1) !important;
+.acoustic-ripple {
+  animation: acoustic-wave-expand 1.6s infinite ease-out !important;
+}
+
+/* 7. Evidence Progress Bar Transitions */
+.evidence-progress-bar {
+  transition: width 0.3s steps(12), background-color 0.2s ease !important;
 }
