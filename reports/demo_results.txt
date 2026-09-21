@@ -1,0 +1,40 @@
+========================================================================
+OIL PIPELINE PRESSURE MONITORING & LEAK DETECTION SYSTEM
+DEMO RUN SUMMARY REPORT
+========================================================================
+
+1. DATASET METRICS
+   - Total Records Processed : 6000 (10 Hz sampling across 600 seconds)
+   - Monitoring Stations    : 6 stations (0, 20, 40, 60, 80, 100 km)
+   - Operating Modes        : Flowing, Ramping
+
+2. GROUND TRUTH VS DETECTION RESULTS
+
+   Event A: Small Chronic Leak
+   - Ground Truth Location  : 57.0 km (Start time: t = 330.0 s, Leak rate: ~16 m3/h)
+   - Peak Confidence Score  : 42.2%
+   - Estimated Location     : 56.0 km (Error: 1.0 km)
+   - Detection Result       : DETECTED (Supported by Line-Pack Corrected Flow Imbalance & ML Anomaly)
+
+   Event B: Large Leak with Negative Pressure Wave
+   - Ground Truth Location  : 78.0 km (Start time: t = 520.0 s, Leak rate: ~85 m3/h)
+   - Wave Propagation Speed : 1.0 km/s (1000 m/s)
+   - Peak Confidence Score  : 87.8%
+   - Estimated Location     : 78.0 km (Error: 0.0 km)
+   - Detection Result       : LEAK DETECTED (Supported by NPW Wave Front + High Flow Drop + ML Anomaly)
+
+   Event C: Flow Ramping Transition
+   - Time Window            : t = 150.0 s to 240.0 s (Pump ramp from 500 to 580 m3/h)
+   - Result                 : NO FALSE LEAK ALERT (Correctly classified via Ramping Isolation Forest & Line-Pack Correction)
+
+3. EVIDENCE FUSION WEIGHTS
+   - Machine Learning Evidence : 40% (Operating-mode specific Isolation Forest)
+   - Flow Imbalance Evidence   : 30% (Line-pack corrected mass balance)
+   - NPW Wave Front Evidence   : 30% (10 Hz pressure rate of change arrival timing)
+
+4. SYSTEM LIMITATIONS & PROTOTYPE DISCLAIMER
+   - Uses synthetic simulated data for demonstration purposes.
+   - Simplified hydraulic model and line-pack dynamic storage coefficient.
+   - Simplified acoustic wave propagation model.
+   - Local prototype; requires calibration and hardware edge integration for industrial deployment.
+========================================================================
