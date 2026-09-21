@@ -1,6 +1,6 @@
 # Oil Pipeline Pressure Monitoring & Leak Detection System
 
-A complete **80% working software prototype** for an industrial Oil Pipeline Pressure Monitoring and Leak Detection System.
+A complete **working software prototype** for an industrial Oil Pipeline Pressure Monitoring and Leak Detection System.
 
 This project uses synthetic multi-sensor pipeline data, feature engineering, line-pack mass balance correction, mode-specific Machine Learning (Isolation Forest), Negative Pressure Wave (NPW) wave front timing, and multi-evidence fusion to detect, classify, locate, and alert on pipeline leaks.
 
@@ -68,7 +68,7 @@ The system monitors joint behavior between multi-station pressure streams (10 Hz
 
 ```bash
 # 1. Clone or navigate into the project directory
-cd oil-pipeline-monitoring
+cd Oil-Pipeline-Monitoring-System
 
 # 2. Create a Python virtual environment
 python3 -m venv .venv
