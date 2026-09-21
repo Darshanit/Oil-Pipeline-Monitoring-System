@@ -284,7 +284,7 @@ def render_pipeline_svg(
         seg_end_km = st_km[i + 1]
 
         is_leak_seg = False
-        if result.leak_km is not None and seg_start_km <= result.leak_km <= seg_end_km:
+        if result.leak_km is not None and pd.notna(result.leak_km) and seg_start_km <= float(result.leak_km) <= seg_end_km:
             is_leak_seg = True
 
         if is_leak_seg and result.alert_state == AlertState.CRITICAL.value:
@@ -296,71 +296,76 @@ def render_pipeline_svg(
         else:
             core_color = "#35D07F"
 
-        seg_elements.append(f'''
-            <line x1="{seg_x1}" y1="{y_pipe}" x2="{seg_x2}" y2="{y_pipe}" stroke="#111111" stroke-width="14" stroke-linecap="square"/>
-            <line x1="{seg_x1}" y1="{y_pipe}" x2="{seg_x2}" y2="{y_pipe}" stroke="{core_color}" stroke-width="6"/>
-            <!-- Animated oil dashes representing physical flow -->
-            <line x1="{seg_x1}" y1="{y_pipe}" x2="{seg_x2}" y2="{y_pipe}" stroke="#111111" stroke-width="3" class="oil-flow-line {flow_anim_class}"/>
-            <text x="{(seg_x1 + seg_x2)/2}" y="{y_pipe + 26}" font-family="monospace" font-weight="900" font-size="10" fill="#111111" text-anchor="middle">SEG {i+1} ({int(seg_start_km)}-{int(seg_end_km)}km)</text>
-        ''')
+        seg_elements.append(
+            f'<line x1="{seg_x1}" y1="{y_pipe}" x2="{seg_x2}" y2="{y_pipe}" stroke="#111111" stroke-width="14" stroke-linecap="square"/>'
+            f'<line x1="{seg_x1}" y1="{y_pipe}" x2="{seg_x2}" y2="{y_pipe}" stroke="{core_color}" stroke-width="6"/>'
+            f'<line x1="{seg_x1}" y1="{y_pipe}" x2="{seg_x2}" y2="{y_pipe}" stroke="#111111" stroke-width="3" class="oil-flow-line {flow_anim_class}"/>'
+            f'<text x="{(seg_x1 + seg_x2)/2}" y="{y_pipe + 26}" font-family="monospace" font-weight="900" font-size="10" fill="#111111" text-anchor="middle">SEG {i+1} ({int(seg_start_km)}-{int(seg_end_km)}km)</text>'
+        )
 
     # Station Nodes & Pressure Badges
     st_elements = []
     for i, x in enumerate(st_xs):
         p_val = result.pressures.get(f"P_st{i+1}", 0.0)
-        st_elements.append(f'''
-            <rect x="{x - 16 + 4}" y="{y_pipe - 16 + 4}" width="32" height="32" fill="#111111" />
-            <rect x="{x - 16}" y="{y_pipe - 16}" width="32" height="32" fill="#FFD23F" stroke="#111111" stroke-width="3" />
-            <text x="{x}" y="{y_pipe + 5}" font-family="monospace" font-weight="900" font-size="13" fill="#111111" text-anchor="middle">S{i+1}</text>
-
-            <rect x="{x - 36 + 3}" y="{y_pipe - 56 + 3}" width="72" height="24" fill="#111111" />
-            <rect x="{x - 36}" y="{y_pipe - 56}" width="72" height="24" fill="#FFFFFF" stroke="#111111" stroke-width="2" />
-            <text x="{x}" y="{y_pipe - 40}" font-family="monospace" font-weight="900" font-size="11" fill="#111111" text-anchor="middle">{p_val:.1f} bar</text>
-
-            <text x="{x}" y="{y_pipe + 46}" font-family="monospace" font-weight="700" font-size="10" fill="#111111" text-anchor="middle">{int(st_km[i])} KM</text>
-        ''')
+        st_elements.append(
+            f'<rect x="{x - 16 + 4}" y="{y_pipe - 16 + 4}" width="32" height="32" fill="#111111"/>'
+            f'<rect x="{x - 16}" y="{y_pipe - 16}" width="32" height="32" fill="#FFD23F" stroke="#111111" stroke-width="3"/>'
+            f'<text x="{x}" y="{y_pipe + 5}" font-family="monospace" font-weight="900" font-size="13" fill="#111111" text-anchor="middle">S{i+1}</text>'
+            f'<rect x="{x - 36 + 3}" y="{y_pipe - 56 + 3}" width="72" height="24" fill="#111111"/>'
+            f'<rect x="{x - 36}" y="{y_pipe - 56}" width="72" height="24" fill="#FFFFFF" stroke="#111111" stroke-width="2"/>'
+            f'<text x="{x}" y="{y_pipe - 40}" font-family="monospace" font-weight="900" font-size="11" fill="#111111" text-anchor="middle">{p_val:.1f} bar</text>'
+            f'<text x="{x}" y="{y_pipe + 46}" font-family="monospace" font-weight="700" font-size="10" fill="#111111" text-anchor="middle">{int(st_km[i])} KM</text>'
+        )
 
     # Estimated Leak Beacon & NPW acoustic wave ripples
     leak_elements = []
-    active_leak_km = result.leak_km if result.leak_km is not None else (gt_km if gt_km is not None else None)
-    
+    active_leak_km = None
+    if result.leak_km is not None and pd.notna(result.leak_km):
+        active_leak_km = float(result.leak_km)
+    elif gt_km is not None and pd.notna(gt_km):
+        active_leak_km = float(gt_km)
+    elif npw_replay_active:
+        active_leak_km = 78.0  # Canonical leak demonstration location
+
     if active_leak_km is not None:
         lx = km_to_x(active_leak_km)
-        
+
         # NPW Acoustic wave ripples if replay active
         if npw_replay_active and motion_mode != "OFF":
-            leak_elements.append(f'''
-                <circle cx="{lx}" cy="{y_pipe}" r="12" fill="none" stroke="#FF5A5F" class="acoustic-ripple" />
-                <circle cx="{lx}" cy="{y_pipe}" r="28" fill="none" stroke="#FF5A5F" class="acoustic-ripple" style="animation-delay: 0.5s !important;" />
-                <circle cx="{lx}" cy="{y_pipe}" r="48" fill="none" stroke="#FF5A5F" class="acoustic-ripple" style="animation-delay: 1.0s !important;" />
-            ''')
+            leak_elements.append(
+                f'<circle cx="{lx}" cy="{y_pipe}" r="12" fill="none" stroke="#FF5A5F" class="acoustic-ripple"/>'
+                f'<circle cx="{lx}" cy="{y_pipe}" r="28" fill="none" stroke="#FF5A5F" class="acoustic-ripple" style="animation-delay: 0.5s !important;"/>'
+                f'<circle cx="{lx}" cy="{y_pipe}" r="48" fill="none" stroke="#FF5A5F" class="acoustic-ripple" style="animation-delay: 1.0s !important;"/>'
+            )
 
-        if result.leak_km is not None:
-            leak_elements.append(f'''
-                <polygon points="{lx - 12},{y_pipe - 22} {lx + 12},{y_pipe - 22} {lx},{y_pipe - 4}" fill="#FF5A5F" stroke="#111111" stroke-width="3"/>
-                <rect x="{lx - 55 + 4}" y="{y_pipe - 78 + 4}" width="110" height="26" fill="#111111" />
-                <rect x="{lx - 55}" y="{y_pipe - 78}" width="110" height="26" fill="#FF5A5F" stroke="#111111" stroke-width="3" />
-                <text x="{lx}" y="{y_pipe - 61}" font-family="monospace" font-weight="900" font-size="11" fill="#FFFFFF" text-anchor="middle">EST: {result.leak_km:.1f} KM</text>
-            ''')
+        if result.leak_km is not None and pd.notna(result.leak_km):
+            leak_elements.append(
+                f'<polygon points="{lx - 12},{y_pipe - 22} {lx + 12},{y_pipe - 22} {lx},{y_pipe - 4}" fill="#FF5A5F" stroke="#111111" stroke-width="3"/>'
+                f'<rect x="{lx - 55 + 4}" y="{y_pipe - 78 + 4}" width="110" height="26" fill="#111111"/>'
+                f'<rect x="{lx - 55}" y="{y_pipe - 78}" width="110" height="26" fill="#FF5A5F" stroke="#111111" stroke-width="3"/>'
+                f'<text x="{lx}" y="{y_pipe - 61}" font-family="monospace" font-weight="900" font-size="11" fill="#FFFFFF" text-anchor="middle">EST: {float(result.leak_km):.1f} KM</text>'
+            )
 
     # Ground Truth Beacon (if present)
     gt_elements = []
     if gt_km is not None and pd.notna(gt_km):
         gx = km_to_x(float(gt_km))
-        gt_elements.append(f'''
-            <circle cx="{gx}" cy="{y_pipe + 62}" r="8" fill="#35D07F" stroke="#111111" stroke-width="3" />
-            <text x="{gx}" y="{y_pipe + 80}" font-family="monospace" font-weight="900" font-size="10" fill="#111111" text-anchor="middle">ACTUAL: {gt_km:.1f} KM</text>
-        ''')
+        gt_elements.append(
+            f'<circle cx="{gx}" cy="{y_pipe + 62}" r="8" fill="#35D07F" stroke="#111111" stroke-width="3"/>'
+            f'<text x="{gx}" y="{y_pipe + 80}" font-family="monospace" font-weight="900" font-size="10" fill="#111111" text-anchor="middle">ACTUAL: {float(gt_km):.1f} KM</text>'
+        )
 
-    svg_code = f'''<div class="pipeline-svg-container">
-        <svg viewBox="0 0 1000 170" width="100%" height="auto" xmlns="http://www.w3.org/2000/svg" style="background-color: #FFFFFF; display: block;">
-            <line x1="{x_left}" y1="{y_pipe}" x2="{x_left + x_span}" y2="{y_pipe}" stroke="#E2DFCD" stroke-width="1"/>
-            {''.join(seg_elements)}
-            {''.join(st_elements)}
-            {''.join(leak_elements)}
-            {''.join(gt_elements)}
-        </svg>
-    </div>'''
+    svg_code = (
+        '<div class="pipeline-svg-container">'
+        f'<svg viewBox="0 0 1000 170" width="100%" height="170" xmlns="http://www.w3.org/2000/svg" style="background-color: #FFFFFF; display: block; width: 100%; height: auto;">'
+        f'<line x1="{x_left}" y1="{y_pipe}" x2="{x_left + x_span}" y2="{y_pipe}" stroke="#E2DFCD" stroke-width="1"/>'
+        f'{"".join(seg_elements)}'
+        f'{"".join(st_elements)}'
+        f'{"".join(leak_elements)}'
+        f'{"".join(gt_elements)}'
+        '</svg>'
+        '</div>'
+    )
     return svg_code
 
 
@@ -745,7 +750,11 @@ def main():
 
     # NPW REPLAY ACOUSTIC ANALYSIS PANEL (When Active)
     if st.session_state.get("npw_replay_active", False):
-        origin_leak_km = result.leak_km if result.leak_km is not None else (gt_km if gt_km is not None else 78.0)
+        origin_leak_km = 78.0
+        if result.leak_km is not None and pd.notna(result.leak_km):
+            origin_leak_km = float(result.leak_km)
+        elif gt_km is not None and pd.notna(gt_km):
+            origin_leak_km = float(gt_km)
         npw_data = compute_npw_replay_data(origin_leak_km, wave_speed_km_s=1.0)
 
         st.markdown(f'''

@@ -10,7 +10,7 @@ Implements:
 
 from collections import deque
 from enum import Enum
-from typing import Optional, Tuple
+from typing import Dict, Optional, Tuple
 from src.config import DEFAULT_CONFIG, PipelineConfig
 from src.contract import AlertState
 
@@ -34,12 +34,26 @@ class AlertStateMachine:
         self.consecutive_leak_count = 0
         self.consecutive_suspect_count = 0
 
+    def check_agreement(self, signals: Optional[Dict[str, float]]) -> Tuple[bool, int]:
+        """
+        Evaluates whether at least `min_agreement_signals` independent evidence channels
+        exceed their configured individual detection thresholds.
+        """
+        if signals is None:
+            return True, 0
+        triggers = sum(
+            1 for sig, thresh in self.config.signal_thresholds.items()
+            if signals.get(sig, 0.0) >= thresh
+        )
+        return triggers >= self.config.min_agreement_signals, triggers
+
     def update(
         self,
         raw_score: float,
         mode: str = "Flowing",
         flow_imbalance: float = 0.0,
-        npw_active: bool = False
+        npw_active: bool = False,
+        signals: Optional[Dict[str, float]] = None
     ) -> Tuple[AlertState, int, Optional[str]]:
         """
         Updates state with a new time-step score.
@@ -49,6 +63,7 @@ class AlertStateMachine:
           mode: Current operating mode
           flow_imbalance: Linepack-corrected flow imbalance
           npw_active: Whether an NPW wave front was recently detected
+          signals: Optional dict of independent signal scores {"ml": ..., "flow": ..., "npw": ..., "pressure": ...}
 
         Returns:
           Tuple of (current_state, persistence_count, suppression_reason)
@@ -64,6 +79,17 @@ class AlertStateMachine:
             suppression_reason = "Transient line-pack charging during flow ramp; leak alert suppressed."
             self.current_state = AlertState.NORMAL
             return self.current_state, 0, suppression_reason
+
+        # Check Agreement Rule: at least min_agreement_signals must exceed individual thresholds
+        if signals is not None:
+            agrees, n_agree = self.check_agreement(signals)
+            if not agrees and self.current_state == AlertState.NORMAL:
+                if raw_score >= self.config.suspect_confidence_threshold:
+                    suppression_reason = (
+                        f"Suppressed by agreement rule: fewer than {self.config.min_agreement_signals} "
+                        f"independent signals agree ({n_agree} active)."
+                    )
+                    return self.current_state, 0, suppression_reason
 
         # Count samples exceeding thresholds within the N-sample window
         n_leak_triggers = sum(1 for s in self.history if s >= self.config.leak_confidence_threshold)
@@ -87,7 +113,7 @@ class AlertStateMachine:
         else:  # NORMAL
             if n_leak_triggers >= self.config.persistence_m_triggers or (rolling_mean >= self.config.leak_confidence_threshold and persistence_len >= 10):
                 self.current_state = AlertState.LEAK_DETECTED
-            elif n_suspect_triggers >= (self.config.persistence_m_triggers // 2) or rolling_mean >= self.config.suspect_confidence_threshold:
+            elif n_suspect_triggers >= (self.config.persistence_m_triggers // 2) or (rolling_mean >= self.config.suspect_confidence_threshold and persistence_len >= 5):
                 self.current_state = AlertState.SUSPECTED_ANOMALY
 
         # Record suppression reason if raw score is high but persistence not met

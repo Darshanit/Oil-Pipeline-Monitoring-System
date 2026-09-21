@@ -353,6 +353,13 @@ button[kind="primary"] {
   box-sizing: border-box !important;
 }
 
+.pipeline-svg-container svg {
+  width: 100% !important;
+  height: auto !important;
+  min-height: 160px !important;
+  display: block !important;
+}
+
 .alert-panel {
   background-color: #FFFFFF !important;
   border: 3px solid #111111 !important;
