@@ -42,11 +42,11 @@ def calculate_pressure_evidence_score(
       Numpy array of pressure evidence scores in [0.0, 1.0].
     """
     if weights is None:
-        weights = {"grad": 0.40, "slope": 0.35, "var": 0.25}
+        weights = {"grad": 0.55, "slope": 0.25, "var": 0.20}
 
-    w_grad = weights.get("grad", 0.40)
-    w_slope = weights.get("slope", 0.35)
-    w_var = weights.get("var", 0.25)
+    w_grad = weights.get("grad", 0.55)
+    w_slope = weights.get("slope", 0.25)
+    w_var = weights.get("var", 0.20)
     total_w = w_grad + w_slope + w_var
     if total_w > 0:
         w_grad, w_slope, w_var = w_grad / total_w, w_slope / total_w, w_var / total_w
@@ -82,9 +82,9 @@ def calculate_pressure_evidence_score(
         grads = df[grad_cols].values
         # Gradient spread across sections: normal = low dispersion, leak = kinked/spread
         grad_spread = np.std(grads, axis=1)
-        s_grad = 1.0 / (1.0 + np.exp(-15.0 * (grad_spread - gradient_tolerance_bar_per_km)))
+        s_grad = 1.0 / (1.0 + np.exp(-120.0 * (grad_spread - gradient_tolerance_bar_per_km)))
         # Suppress baseline floor when well within normal tolerance
-        s_grad = np.where(grad_spread < gradient_tolerance_bar_per_km * 0.7, s_grad * 0.25, s_grad)
+        s_grad = np.where(grad_spread < gradient_tolerance_bar_per_km * 0.70, s_grad * 0.15, s_grad)
     else:
         s_grad = np.zeros(n_samples)
 

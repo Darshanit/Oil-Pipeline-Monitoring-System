@@ -13,8 +13,6 @@ import pandas as pd
 # pyrefly: ignore [missing-import]
 import plotly.graph_objects as go
 # pyrefly: ignore [missing-import]
-import plotly.express as px
-# pyrefly: ignore [missing-import]
 import streamlit as st
 
 # Add root directory to python path
@@ -54,7 +52,7 @@ st.markdown("""
         color: #28a745;
         padding: 12px;
         border-radius: 8px;
-        font-size: 24px;
+        font-size: 22px;
         font-weight: bold;
         text-align: center;
     }
@@ -64,7 +62,7 @@ st.markdown("""
         color: #ffc107;
         padding: 12px;
         border-radius: 8px;
-        font-size: 24px;
+        font-size: 22px;
         font-weight: bold;
         text-align: center;
     }
@@ -74,7 +72,7 @@ st.markdown("""
         color: #dc3545;
         padding: 12px;
         border-radius: 8px;
-        font-size: 24px;
+        font-size: 22px;
         font-weight: bold;
         text-align: center;
         box-shadow: 0 0 15px rgba(220, 53, 69, 0.5);
@@ -82,65 +80,126 @@ st.markdown("""
     .action-box {
         background: rgba(23, 162, 184, 0.15);
         border-left: 4px solid #17a2b8;
-        padding: 15px;
+        padding: 12px 16px;
         border-radius: 4px;
         font-size: 15px;
-        margin-top: 10px;
+        margin-top: 8px;
+        margin-bottom: 14px;
+    }
+    .suppression-banner {
+        background: rgba(49, 130, 206, 0.2);
+        border-left: 5px solid #3182ce;
+        padding: 12px 16px;
+        border-radius: 6px;
+        font-size: 14px;
+        margin-top: 8px;
+        margin-bottom: 12px;
+    }
+    .localization-card {
+        background: rgba(229, 62, 62, 0.12);
+        border: 1px solid rgba(229, 62, 62, 0.35);
+        border-radius: 8px;
+        padding: 12px 18px;
+        margin-top: 8px;
+        margin-bottom: 12px;
     }
 </style>
 """, unsafe_allow_html=True)
 
 
 @st.cache_data
-def load_detection_results():
-    """Loads pre-calculated detection results or executes pipeline if not found."""
-    csv_path = os.path.abspath(os.path.join(os.path.dirname(__file__), "../data/processed/detection_results.csv"))
-    if not os.path.exists(csv_path):
+def load_scenario_detection_results(scenario_name: str, seed: int = 42) -> pd.DataFrame:
+    """
+    Loads or executes detection results for the specified demonstration scenario.
+    Uses Streamlit caching so that scrub/playback do not trigger unnecessary recomputation.
+    """
+    base_dir = os.path.abspath(os.path.join(os.path.dirname(__file__), ".."))
+
+    if "FULL" in scenario_name:
+        csv_path = os.path.join(base_dir, "data/processed/detection_results.csv")
+        if os.path.exists(csv_path):
+            return pd.read_csv(csv_path)
         from src.pipeline.run_detection import run_full_pipeline
-        base_dir = os.path.abspath(os.path.join(os.path.dirname(__file__), ".."))
         return run_full_pipeline(base_dir)
-    return pd.read_csv(csv_path)
+
+    # Deterministic scenario generation & real pipeline execution
+    from src.simulation import generate_scenario_data
+    from src.pipeline.run_detection import execute_detection_pipeline
+
+    if "NORMAL" in scenario_name:
+        sc_type = "NORMAL"
+    elif "SMALL" in scenario_name:
+        sc_type = "SMALL CHRONIC LEAK"
+    elif "LARGE" in scenario_name:
+        sc_type = "LARGE LEAK"
+    elif "PUMP" in scenario_name:
+        sc_type = "PUMP TRANSIENT"
+    else:
+        sc_type = "VALVE EVENT"
+
+    df_raw = generate_scenario_data(sc_type, duration_sec=120.0, random_seed=seed)
+    return execute_detection_pipeline(df_raw, base_dir=base_dir)
 
 
 def main():
     st.title("🛢️ Oil Pipeline Pressure Monitoring & Leak Detection System")
     st.markdown("*Real-Time Multi-Sensor Feature Fusion & Acoustic/Hydraulic Localization Prototype*")
 
-    # Load dataset
-    df = load_detection_results()
-
     # Sidebar Controls
     st.sidebar.header("⚙️ Simulation Controls")
 
+    # Scenario Selector
+    scenario_options = [
+        "FULL 600s TIMELINE (Original)",
+        "1. NORMAL (Steady Nominal Baseline)",
+        "2. SMALL CHRONIC LEAK (Pinhole at 57 km)",
+        "3. LARGE LEAK (NPW Rupture at 78 km)",
+        "4. PUMP TRANSIENT (Surge with Mode Gating)",
+        "5. VALVE EVENT (Throttling Transient)"
+    ]
+    selected_scenario = st.sidebar.selectbox("Active Demonstration Scenario:", scenario_options, index=3)
+
+    # Load cached scenario results
+    df = load_scenario_detection_results(selected_scenario)
+
     # Interactive Time Slider
     max_t = float(df["timestamp"].max())
+    default_val = 540.0 if "FULL" in selected_scenario else min(50.0, max_t)
     selected_t = st.sidebar.slider(
         "Playback Timeline (seconds):",
         min_value=0.0,
         max_value=max_t,
-        value=540.0,
-        step=1.0
+        value=float(default_val),
+        step=0.5
     )
 
     # Configurable Evidence Weights
     st.sidebar.markdown("---")
     st.sidebar.subheader("⚖️ Evidence Fusion Weights")
-    w_ml = st.sidebar.slider("ML Anomaly Weight", 0.0, 1.0, 0.40, 0.05)
-    w_flow = st.sidebar.slider("Flow Imbalance Weight", 0.0, 1.0, 0.30, 0.05)
-    w_npw = st.sidebar.slider("NPW Wave Front Weight", 0.0, 1.0, 0.30, 0.05)
+    w_ml = st.sidebar.slider("ML Anomaly Weight", 0.0, 1.0, 0.30, 0.05)
+    w_flow = st.sidebar.slider("Flow Imbalance Weight", 0.0, 1.0, 0.35, 0.05)
+    w_npw = st.sidebar.slider("NPW Wave Front Weight", 0.0, 1.0, 0.15, 0.05)
+    w_press = st.sidebar.slider("Pressure Evidence Weight", 0.0, 1.0, 0.20, 0.05)
 
-    # Re-calculate fusion scores dynamically if weights adjusted
-    custom_weights = {"ml": w_ml, "flow": w_flow, "npw": w_npw}
+    # Dynamic 4-channel fusion recalculation if weights adjusted
+    custom_weights = {"ml": w_ml, "flow": w_flow, "npw": w_npw, "pressure": w_press}
+    press_scores = df["pressure_evidence_score"].values if "pressure_evidence_score" in df.columns else None
     df_fusion, _ = fuse_evidence_signals(
         df["ml_evidence_score"].values,
         df["flow_evidence_score"].values,
         df["npw_evidence_score"].values,
-        weights=custom_weights
+        pressure_scores=press_scores,
+        weights=custom_weights,
+        operating_modes=df.get("operating_mode"),
+        event_types=df.get("event_ground_truth"),
+        timestamps=df["timestamp"].values
     )
 
     # Update dynamic columns
     df["confidence_pct"] = df_fusion["confidence_pct"]
     df["status"] = df_fusion["status"]
+    if "suppression_reason" in df_fusion.columns:
+        df["suppression_reason"] = df_fusion["suppression_reason"]
 
     # Filter data up to selected timestamp
     df_current = df[df["timestamp"] <= selected_t]
@@ -150,6 +209,7 @@ def main():
     conf = current_row["confidence_pct"]
     mode = current_row["operating_mode"]
     gt_event = current_row["event_ground_truth"]
+    supp_reason = current_row.get("suppression_reason")
 
     # Top KPI Metrics Header
     col1, col2, col3, col4 = st.columns(4)
@@ -165,23 +225,48 @@ def main():
 
     with col2:
         st.metric("Leak Confidence", f"{conf:.1f}%", delta=f"{conf - 10.0:.1f}%" if conf > 10 else None)
-        st.progress(min(1.0, conf / 100.0))
+        st.progress(min(1.0, max(0.0, conf / 100.0)))
 
     with col3:
         st.metric("Operating Mode", mode)
-        st.caption(f"Ground Truth: **{gt_event}**")
+        st.caption(f"Ground Truth Event: **{gt_event}**")
 
     with col4:
         est_km = current_row.get("estimated_leak_km", np.nan)
-        if not np.isnan(est_km):
-            st.metric("Estimated Leak Location", f"{est_km:.1f} km", delta=f"{current_row['nearest_station']}")
+        if pd.notna(est_km):
+            st.metric("Estimated Location", f"{est_km:.1f} km", delta=f"{current_row['nearest_station']}")
         else:
-            st.metric("Estimated Leak Location", "None", delta="Pipeline Nominal")
+            st.metric("Estimated Location", "None", delta="Pipeline Nominal")
+
+    # Scenario-Specific Notifications & Honest Proof Display
+    if supp_reason and str(supp_reason) not in ["nan", "None", ""]:
+        st.markdown(
+            f'<div class="suppression-banner">🛡️ <strong>Mode Gating Active:</strong> {supp_reason}. '
+            f'Confidence is capped to prevent false CRITICAL alarms.</div>',
+            unsafe_allow_html=True
+        )
+
+    # Large Leak Localization Verification Display
+    gt_km = current_row.get("ground_truth_km")
+    err_km = current_row.get("localization_error_km")
+    if pd.notna(gt_km):
+        loc_c1, loc_c2, loc_c3, loc_c4 = st.columns(4)
+        with loc_c1:
+            st.metric("🎯 Ground Truth", f"{gt_km:.1f} km")
+        with loc_c2:
+            st.metric("📍 Estimated Location", f"{est_km:.1f} km" if pd.notna(est_km) else "Awaiting Wave...")
+        with loc_c3:
+            st.metric("📏 Localization Error", f"{err_km:.1f} km" if pd.notna(err_km) else "—")
+        with loc_c4:
+            st.metric("⚡ Wave Speed", "1.0 km/s (1000 m/s)")
+
+    # Small Chronic Leak Honest Diagnostic Notice
+    if "SMALL" in selected_scenario and "LEAK" in gt_event:
+        st.caption("ℹ️ **Honest Diagnostic Note**: Pinhole chronic leak (~16 m³/h). Detectable via sustained flow mass imbalance and subtle gradient shift; gradual onset correctly does not generate an acoustic shockwave.")
 
     # Recommended Action Box
-    st.markdown(f'<div class="action-box"><strong>Recommended Action:</strong> {current_row["recommended_action"]}</div>', unsafe_allow_html=True)
-
-    st.markdown("<br>", unsafe_allow_html=True)
+    action_text = current_row.get("recommended_action", "NORMAL OPERATION: All parameters within standard operational baseline.")
+    st.markdown(f'<div class="action-box"><strong>Recommended Operator Action:</strong> {action_text}</div>', unsafe_allow_html=True)
 
     # Row 1: Pipeline Visualization Schematic
     st.subheader("📍 Pipeline Schematic & Spatial Sensor Layout")
@@ -208,15 +293,26 @@ def main():
         name="Monitoring Stations"
     ))
 
-    # Add leak indicator if active
-    if not np.isnan(est_km):
+    # Add ground truth leak marker if present
+    if pd.notna(gt_km):
+        fig_pipe.add_trace(go.Scatter(
+            x=[gt_km], y=[0],
+            mode="markers+text",
+            marker=dict(symbol="circle-open", size=36, color="#48bb78", line=dict(color="#48bb78", width=3)),
+            text=[f"GROUND TRUTH<br>{gt_km:.1f} km"],
+            textposition="top center",
+            name="Ground Truth"
+        ))
+
+    # Add estimated leak beacon if active
+    if pd.notna(est_km):
         fig_pipe.add_trace(go.Scatter(
             x=[est_km], y=[0],
             mode="markers+text",
             marker=dict(symbol="triangle-up", size=32, color="#e53e3e", line=dict(color="#ffffff", width=3)),
-            text=[f"LEAK ALERT<br>{est_km:.1f} km"],
+            text=[f"ESTIMATED<br>{est_km:.1f} km"],
             textposition="bottom center",
-            name="Leak Beacon"
+            name="Estimated Leak"
         ))
 
     fig_pipe.update_layout(
@@ -263,7 +359,8 @@ def main():
         fig_q = go.Figure()
         fig_q.add_trace(go.Scatter(x=df_current["timestamp"], y=df_current["flow_in"], mode="lines", name="Inlet Flow (m³/h)", line=dict(color="#3182ce")))
         fig_q.add_trace(go.Scatter(x=df_current["timestamp"], y=df_current["flow_out"], mode="lines", name="Outlet Flow (m³/h)", line=dict(color="#805ad5")))
-        fig_q.add_trace(go.Scatter(x=df_current["timestamp"], y=df_current["corrected_flow_imbalance"], mode="lines", name="Corrected Imbalance (m³/h)", line=dict(color="#319795")))
+        if "corrected_flow_imbalance" in df_current.columns:
+            fig_q.add_trace(go.Scatter(x=df_current["timestamp"], y=df_current["corrected_flow_imbalance"], mode="lines", name="Corrected Imbalance (m³/h)", line=dict(color="#319795")))
         fig_q.add_vline(x=selected_t, line_dash="dash", line_color="white")
         fig_q.update_layout(
             title="Flow Dynamics & Line-Pack Corrected Imbalance (m³/h)",
@@ -284,17 +381,22 @@ def main():
         ml_ev = current_row["ml_evidence_score"] * 100.0
         flow_ev = current_row["flow_evidence_score"] * 100.0
         npw_ev = current_row["npw_evidence_score"] * 100.0
+        press_ev = current_row.get("pressure_evidence_score", 0.0) * 100.0
 
         st.markdown(f"**ML Anomaly Score ({w_ml*100:.0f}% Weight)**")
-        st.progress(min(1.0, ml_ev / 100.0))
-        st.caption(f"Score: **{ml_ev:.1f}%** (Isolation Forest per mode '{mode}')")
+        st.progress(min(1.0, max(0.0, ml_ev / 100.0)))
+        st.caption(f"Score: **{ml_ev:.1f}%** (Mode: '{mode}')")
 
         st.markdown(f"**Flow Imbalance Score ({w_flow*100:.0f}% Weight)**")
-        st.progress(min(1.0, flow_ev / 100.0))
-        st.caption(f"Score: **{flow_ev:.1f}%** (Line-pack corrected storage balance)")
+        st.progress(min(1.0, max(0.0, flow_ev / 100.0)))
+        st.caption(f"Score: **{flow_ev:.1f}%** (Line-pack corrected mass balance)")
+
+        st.markdown(f"**Pressure Evidence Score ({w_press*100:.0f}% Weight)**")
+        st.progress(min(1.0, max(0.0, press_ev / 100.0)))
+        st.caption(f"Score: **{press_ev:.1f}%** (Hydraulic gradient kink & slopes)")
 
         st.markdown(f"**NPW Wave Front Score ({w_npw*100:.0f}% Weight)**")
-        st.progress(min(1.0, npw_ev / 100.0))
+        st.progress(min(1.0, max(0.0, npw_ev / 100.0)))
         st.caption(f"Score: **{npw_ev:.1f}%** (10 Hz acoustic drop wave front)")
 
         st.markdown("---")

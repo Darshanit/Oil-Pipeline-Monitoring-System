@@ -63,8 +63,27 @@ def calculate_flow_evidence_score(
             lp_rate = compute_linepack_rate(mean_dp, linepack_coeff=linepack_coeff)
             corrected_inlet_flow = flow_in - lp_rate
             corrected_imbalance = corrected_inlet_flow - flow_out
+
+            if "operating_mode" in df.columns:
+                is_ramping = df["operating_mode"].astype(str).str.upper().str.contains("RAMP").values
+                if np.any(is_ramping):
+                    ramp_offset = float(np.median(corrected_imbalance[is_ramping]))
+                    corrected_imbalance = np.where(
+                        is_ramping,
+                        corrected_imbalance - ramp_offset,
+                        corrected_imbalance
+                    )
         elif "corrected_flow_imbalance" in df.columns:
             corrected_imbalance = df["corrected_flow_imbalance"].values
+            if "operating_mode" in df.columns:
+                is_ramping = df["operating_mode"].astype(str).str.upper().str.contains("RAMP").values
+                if np.any(is_ramping):
+                    ramp_offset = float(np.median(corrected_imbalance[is_ramping]))
+                    corrected_imbalance = np.where(
+                        is_ramping,
+                        corrected_imbalance - ramp_offset,
+                        corrected_imbalance
+                    )
         elif "raw_flow_imbalance" in df.columns:
             corrected_imbalance = df["raw_flow_imbalance"].values
         else:

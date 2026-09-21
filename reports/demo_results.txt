@@ -12,15 +12,15 @@ DEMO RUN SUMMARY REPORT
 
    Event A: Small Chronic Leak
    - Ground Truth Location  : 57.0 km (Start time: t = 330.0 s, Leak rate: ~16 m3/h)
-   - Peak Confidence Score  : 42.2%
+   - Peak Confidence Score  : 50.3%
    - Estimated Location     : 56.0 km (Error: 1.0 km)
    - Detection Result       : DETECTED (Supported by Line-Pack Corrected Flow Imbalance & ML Anomaly)
 
    Event B: Large Leak with Negative Pressure Wave
    - Ground Truth Location  : 78.0 km (Start time: t = 520.0 s, Leak rate: ~85 m3/h)
    - Wave Propagation Speed : 1.0 km/s (1000 m/s)
-   - Peak Confidence Score  : 87.8%
-   - Estimated Location     : 78.0 km (Error: 0.0 km)
+   - Peak Confidence Score  : 92.5%
+   - Estimated Location     : 79.0 km (Error: 1.0 km)
    - Detection Result       : LEAK DETECTED (Supported by NPW Wave Front + High Flow Drop + ML Anomaly)
 
    Event C: Flow Ramping Transition

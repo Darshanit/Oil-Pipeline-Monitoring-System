@@ -12,7 +12,9 @@ from src.simulation.scenarios import (
     RampScenario,
     TransientScenario,
     SmallLeakScenario,
-    LargeLeakScenario
+    LargeLeakScenario,
+    PumpTransientScenario,
+    ValveEventScenario
 )
 
 
@@ -119,5 +121,52 @@ def inject_large_leak_npw(
         wave_front = scenario.npw_drop_bar * (1.0 - np.exp(-1.5 * (timestamps[sample_mask] - arrival_time)))
         pressures[sample_mask, i] += wave_front - steady_drop
 
+    return mask, outlet_flow, pressures
+
+
+def inject_pump_transient(
+    timestamps: np.ndarray,
+    inlet_flow: np.ndarray,
+    pressures: np.ndarray,
+    scenario: PumpTransientScenario = PumpTransientScenario(),
+    stations_km: tuple = DEFAULT_CONFIG.station_positions_km
+) -> Tuple[np.ndarray, np.ndarray, np.ndarray]:
+    """Injects pump start surge oscillation pulse propagating down the pipeline."""
+    mask = (timestamps >= scenario.start_time) & (timestamps <= scenario.start_time + scenario.duration_sec)
+    t_trans = timestamps[mask] - scenario.start_time
+
+    for i, dist in enumerate(stations_km):
+        delay = dist / scenario.wave_speed_km_s
+        t_delayed = np.maximum(0, t_trans - delay)
+        pulse = scenario.surge_pressure_bar * np.exp(-scenario.decay_rate * t_delayed) * np.sin(
+            2.0 * np.pi * scenario.frequency_hz * t_delayed
+        )
+        pressures[mask, i] += pulse
+
+    inlet_flow[mask] += scenario.flow_kick_m3h * np.exp(-scenario.decay_rate * t_trans)
+    return mask, inlet_flow, pressures
+
+
+def inject_valve_event(
+    timestamps: np.ndarray,
+    outlet_flow: np.ndarray,
+    pressures: np.ndarray,
+    scenario: ValveEventScenario = ValveEventScenario(),
+    stations_km: tuple = DEFAULT_CONFIG.station_positions_km
+) -> Tuple[np.ndarray, np.ndarray, np.ndarray]:
+    """Injects localized valve maneuver step and flow dip."""
+    mask = (timestamps >= scenario.start_time) & (timestamps <= scenario.start_time + scenario.duration_sec)
+    t_v = timestamps[mask] - scenario.start_time
+
+    for i, dist in enumerate(stations_km):
+        delay = abs(dist - scenario.throttle_location_km) / scenario.wave_speed_km_s
+        t_delayed = np.maximum(0, t_v - delay)
+        if dist < scenario.throttle_location_km:
+            pulse = scenario.upstream_surge_bar * np.exp(-scenario.decay_rate * t_delayed) * (1.0 - np.cos(2.0 * np.pi * scenario.frequency_hz * t_delayed))
+        else:
+            pulse = scenario.downstream_drop_bar * np.exp(-scenario.decay_rate * t_delayed) * (1.0 - np.cos(2.0 * np.pi * scenario.frequency_hz * t_delayed))
+        pressures[mask, i] += pulse
+
+    outlet_flow[mask] -= scenario.flow_dip_m3h * np.exp(-scenario.decay_rate * t_v)
     return mask, outlet_flow, pressures
 

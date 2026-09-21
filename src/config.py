@@ -50,7 +50,7 @@ class PipelineConfig:
     valve_transient_settling_sec: float = 20.0  # settling period for valve maneuvers
 
     # Pressure Evidence Diagnostics
-    pressure_grad_tolerance_bar_per_km: float = 0.15
+    pressure_grad_tolerance_bar_per_km: float = 0.008
     pressure_dp_dt_threshold_bar_s: float = -0.40
     pressure_var_threshold_bar2: float = 0.04
 
@@ -62,10 +62,10 @@ class PipelineConfig:
     # Evidence Fusion Weights (ML, FLOW, NPW, PRESSURE must sum to 1.0)
     fusion_weights: Dict[str, float] = field(
         default_factory=lambda: {
-            "ml": 0.35,
-            "flow": 0.25,
-            "npw": 0.25,
-            "pressure": 0.15
+            "ml": 0.30,
+            "flow": 0.35,
+            "npw": 0.15,
+            "pressure": 0.20
         }
     )
 

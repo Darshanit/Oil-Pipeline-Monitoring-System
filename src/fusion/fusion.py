@@ -35,19 +35,26 @@ def fuse_single_step(
     if weights is None:
         weights = DEFAULT_CONFIG.fusion_weights
 
-    w_ml = weights.get("ml", 0.4)
-    w_flow = weights.get("flow", 0.3)
-    w_npw = weights.get("npw", 0.3)
-    total_w = w_ml + w_flow + w_npw
+    w_ml = weights.get("ml", 0.35)
+    w_flow = weights.get("flow", 0.30)
+    w_npw = weights.get("npw", 0.15)
+    w_p = weights.get("pressure", 0.20) if pressure_score is not None else 0.0
+
+    total_w = w_ml + w_flow + w_npw + w_p
     if total_w > 0:
-        w_ml, w_flow, w_npw = w_ml / total_w, w_flow / total_w, w_npw / total_w
+        w_ml, w_flow, w_npw, w_p = w_ml / total_w, w_flow / total_w, w_npw / total_w, w_p / total_w
 
     raw_fused = (w_ml * ml_score) + (w_flow * flow_score) + (w_npw * npw_score)
+    if pressure_score is not None:
+        raw_fused += (w_p * pressure_score)
+
     contributions = {
         "ml": float(w_ml * ml_score),
         "flow": float(w_flow * flow_score),
         "npw": float(w_npw * npw_score)
     }
+    if pressure_score is not None:
+        contributions["pressure"] = float(w_p * pressure_score)
     raw_fused = float(np.clip(raw_fused, 0.0, 1.0))
 
     suppression_reason = None
@@ -107,15 +114,18 @@ def fuse_evidence_signals(
     if weights is None:
         weights = DEFAULT_CONFIG.fusion_weights
 
-    w_ml = weights.get("ml", 0.4)
-    w_flow = weights.get("flow", 0.3)
-    w_npw = weights.get("npw", 0.3)
+    w_ml = weights.get("ml", 0.35)
+    w_flow = weights.get("flow", 0.30)
+    w_npw = weights.get("npw", 0.15)
+    w_p = weights.get("pressure", 0.20) if pressure_scores is not None else 0.0
 
-    total_w = w_ml + w_flow + w_npw
+    total_w = w_ml + w_flow + w_npw + w_p
     if total_w > 0:
-        w_ml, w_flow, w_npw = w_ml / total_w, w_flow / total_w, w_npw / total_w
+        w_ml, w_flow, w_npw, w_p = w_ml / total_w, w_flow / total_w, w_npw / total_w, w_p / total_w
 
     raw_fused = (w_ml * ml_scores) + (w_flow * flow_scores) + (w_npw * npw_scores)
+    if pressure_scores is not None:
+        raw_fused += (w_p * pressure_scores)
 
     s_series = pd.Series(raw_fused)
     persistent_fused = s_series.rolling(
